@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0a0e">
+  <title>Finalizar pedido — KRYPTO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="checkout-page">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Voltar para a loja KRYPTO">
+      <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
+      <span>KRYPTO<span class="brand-dot">.</span></span>
+    </a>
+    <span class="checkout-step"><span>01</span> DADOS DE ENTREGA</span>
+    <a class="admin-store-link" href="index.html">← Voltar para a loja</a>
+  </header>
+
+  <main class="checkout section-wrap" id="checkout">
+    <div class="checkout-heading">
+      <span class="eyebrow"><span class="eyebrow-line"></span> QUASE SEU</span>
+      <h1>Finalizar <span>pedido.</span></h1>
+      <p>Informe os dados para entrega. Esta página é separada da vitrine<br class="desktop-break"> e mantém o foco na conclusão da compra.</p>
+    </div>
+    <div class="checkout-grid">
+      <form class="customer-form" id="customer-form">
+        <h2><span class="checkout-number">00</span> Sua peça</h2>
+        <div class="form-grid">
+          <label class="field field-full">Produto<select id="product-select" name="produto" required></select></label>
+          <label class="field" id="size-field">Tamanho<select id="size-select" name="tamanho"></select></label>
+          <label class="field">Quantidade<input id="quantity-input" name="quantidade" type="number" min="1" max="10" value="1" required></label>
+        </div>
+        <h2><span class="checkout-number">01</span> Seus dados pessoais</h2>
+        <div class="form-grid">
+          <label class="field field-full">Nome completo<input type="text" name="nome" placeholder="Como podemos te chamar?" autocomplete="name" required></label>
+          <label class="field">Telefone<input type="tel" name="telefone" placeholder="(00) 00000-0000" autocomplete="tel" required></label>
+          <label class="field field-full">E-mail<input type="email" name="email" placeholder="voce@email.com" autocomplete="email" required></label>
+        </div>
+        <h2 class="address-heading"><span class="checkout-number">02</span> Endereço de entrega</h2>
+        <div class="form-grid">
+          <label class="field field-full">Endereço<input type="text" name="endereco" placeholder="Rua, avenida..." autocomplete="street-address" required></label>
+          <label class="field">Número<input type="text" name="numero" placeholder="Nº" required></label>
+          <label class="field">Complemento <span class="optional">(opcional)</span><input type="text" name="complemento" placeholder="Apto, bloco..."></label>
+          <label class="field">Cidade<input type="text" name="cidade" placeholder="Sua cidade" autocomplete="address-level2" required></label>
+          <label class="field">Estado<input type="text" name="estado" placeholder="UF" autocomplete="address-level1" required></label>
+          <label class="field field-full">CEP<input type="text" name="cep" placeholder="00000-000" inputmode="numeric" autocomplete="postal-code" required></label>
+        </div>
+        <p class="form-note" id="checkout-feedback" role="status">Seus dados são usados apenas para este pedido de teste.</p>
+        <button class="button button-primary submit-order" type="submit">Criar pedido de teste <span aria-hidden="true">↗</span></button>
+      </form>
+      <aside class="order-summary">
+        <h2>Resumo do pedido <span id="summary-quantity">1 item</span></h2>
+        <div class="summary-item"><div class="summary-thumb" id="summary-thumb"></div><div><strong id="summary-name">Carregando catálogo...</strong><small id="summary-details"></small></div><b id="summary-price"></b></div>
+        <div class="summary-line"><span>Subtotal</span><span id="summary-subtotal"></span></div>
+        <div class="summary-line"><span>Frete</span><span class="shipping-note">Não calculado neste teste</span></div>
+        <div class="summary-total"><span>Total do pedido</span><strong id="summary-total"></strong></div>
+        <p class="secure-note"><span>✳</span> Protótipo de teste. Nenhum pagamento será cobrado.</p>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-footer checkout-footer">
+    <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
+    <p>VISTA SUA ATITUDE. DESDE 2024.</p>
+    <small>© 2026 KRYPTO.</small>
+  </footer>
+  <script src="checkout.js" defer></script>
+</body>
+</html>

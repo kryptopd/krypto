@@ -1,0 +1,15 @@
+{
+  "name": "krypto-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KRYPTO storefront — Vercel Functions + Supabase",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0"
+  },
+  "devDependencies": {
+    "vercel": "^48.0.0"
+  }
+}

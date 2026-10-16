@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0a0e">
+  <title>Administração — KRYPTO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="admin-page">
+  <header class="site-header admin-header">
+    <a class="brand" href="index.html" aria-label="KRYPTO, voltar à loja">
+      <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
+      <span>KRYPTO<span class="brand-dot">.</span></span>
+    </a>
+    <span class="admin-label"><span></span> PAINEL ADMINISTRATIVO</span>
+    <a class="admin-store-link" href="index.html">← Voltar para loja</a>
+  </header>
+
+  <section class="admin-login" id="admin-login">
+    <span class="eyebrow"><span class="eyebrow-line"></span> ACESSO RESTRITO</span>
+    <h1>Entrar no <span>painel.</span></h1>
+    <p>Use as credenciais administrativas configuradas no servidor.</p>
+    <form id="admin-login-form">
+      <label class="field">Usuário<input name="username" autocomplete="username" required></label>
+      <label class="field">Senha<input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="form-note" id="admin-login-feedback" role="status"></p>
+      <button class="button button-primary" type="submit">Acessar painel <span>↗</span></button>
+    </form>
+  </section>
+  <main class="admin-main" id="admin-main" hidden>
+    <div class="admin-title-row">
+      <div><span class="eyebrow"><span class="eyebrow-line"></span> VISÃO GERAL</span><h1>Painel <span>KRYPTO.</span></h1><p>Gerencie seus produtos e acompanhe os pedidos.</p></div>
+      <button class="button button-outline" id="admin-logout" type="button">Sair do painel</button>
+    </div>
+
+    <section class="admin-stats" aria-label="Resumo da loja">
+      <article class="stat-card"><span>PRODUTOS NO CATÁLOGO</span><strong id="stat-products">0</strong><small>Peças cadastradas</small></article>
+      <article class="stat-card"><span>PEDIDOS RECEBIDOS</span><strong id="stat-orders">0</strong><small><i class="status-dot"></i> <span id="stat-pending">0 aguardando</span></small></article>
+      <article class="stat-card"><span>VENDAS DO DROP</span><strong id="stat-sales">R$ 0,00</strong><small>Pedidos não cancelados</small></article>
+    </section>
+
+    <section class="admin-panel product-editor-panel" id="produtos">
+      <div class="panel-heading"><div><span class="panel-kicker">CATÁLOGO</span><h2>Cadastrar produto</h2><p class="panel-description">Preencha os detalhes da peça para incluir no catálogo.</p></div><span class="panel-count">NOVO ITEM</span></div>
+      <form class="product-editor">
+        <div class="editor-fields">
+          <label class="field">Nome do produto<input type="text" name="produto" placeholder="Ex.: Camiseta Essential" required></label>
+          <label class="field">Categoria<select name="categoria" required><option value="">Selecione uma categoria</option><option>Camisetas</option><option>Moletons</option><option>Acessórios</option></select></label>
+          <label class="field">Preço (R$)<input type="number" name="preco" placeholder="0,00" min="0.01" step="0.01" required></label>
+          <label class="field">Estoque<input type="number" name="estoque" placeholder="Quantidade disponível" min="0" required></label>
+          <label class="field">Tamanhos<input type="text" name="tamanhos" placeholder="Ex.: P, M, G, GG"></label>
+          <label class="field">Etiqueta<input type="text" name="tag" placeholder="Ex.: NOVO"></label>
+          <label class="field">URL da imagem<input type="url" name="imagem" placeholder="https://..." required></label>
+          <label class="field editor-description">Descrição<textarea name="descricao" rows="3" placeholder="Conte um pouco sobre a peça..."></textarea></label>
+        </div>
+        <div class="editor-footer"><p class="form-note" id="product-feedback" role="status">Produtos cadastrados ficam visíveis na vitrine.</p><div class="editor-actions"><button class="button button-outline" type="reset">Limpar formulário</button><button class="button button-primary" type="submit">Cadastrar produto <span>↗</span></button></div></div>
+      </form>
+    </section>
+
+    <section class="admin-panel product-catalog-panel">
+      <div class="panel-heading"><div><span class="panel-kicker">VISUALIZAÇÃO DO CATÁLOGO</span><h2>Produtos cadastrados</h2><p class="panel-description">Confira fotos, categoria, preço e estoque de cada item.</p></div><span class="panel-count" id="catalog-count">0 ITENS</span></div>
+      <div class="admin-products-grid" id="admin-products-grid"></div>
+    </section>
+
+    <section class="admin-panel orders-panel">
+      <div class="panel-heading"><div><span class="panel-kicker">ACOMPANHAMENTO</span><h2>Pedidos recentes</h2></div><span class="panel-count" id="orders-count">0 PEDIDOS</span></div>
+      <p class="privacy-note">Pedidos criados no checkout aparecem aqui. Os dados pessoais só podem ser acessados por este painel autenticado.</p>
+      <div class="table-wrap">
+        <table class="orders-table">
+          <thead><tr><th>PEDIDO</th><th>CLIENTE</th><th>CONTATO</th><th>ENDEREÇO DE ENTREGA</th><th>ITENS</th><th>TOTAL</th><th>STATUS</th></tr></thead>
+          <tbody id="orders-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="admin-disclaimer"><span>✳</span> Protótipo de teste: ainda não processa pagamentos. Não utilize dados reais de clientes antes de definir retenção e controles de privacidade.</div>
+  </main>
+  <footer class="site-footer admin-footer">
+    <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
+    <p>PAINEL DE ADMINISTRAÇÃO · PROTÓTIPO</p>
+    <small>© 2026 KRYPTO.</small>
+  </footer>
+  <script src="admin.js" defer></script>
+</body>
+</html>
