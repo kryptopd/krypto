@@ -30,7 +30,7 @@ function normalize(body) {
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["POST"])) return;
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
   try {
     const product = normalize(req.body || {});
     const { data, error } = await getSupabase().from("products").insert(product).select("*").single();

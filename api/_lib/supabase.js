@@ -30,33 +30,32 @@ function requireMethod(req, res, methods) {
   return true;
 }
 
-function requireAdmin(req, res) {
+async function requireAdmin(req, res) {
   const header = req.headers.authorization || "";
-  const match = header.match(/^Basic\s+(.+)$/i);
-  if (!match || !process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="KRYPTO Admin"');
-    res.status(401).json({ detail: "Credenciais administrativas inválidas." });
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  const url = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const allowedEmail = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+
+  if (!match || !url || !anonKey || !allowedEmail) {
+    res.status(401).json({ detail: "Sessão inválida ou administrador não configurado." });
     return false;
   }
 
-  let decoded;
   try {
-    decoded = Buffer.from(match[1], "base64").toString("utf8");
+    const authClient = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    const { data, error } = await authClient.auth.getUser(match[1]);
+    if (error || !data?.user || String(data.user.email || "").trim().toLowerCase() !== allowedEmail) {
+      res.status(401).json({ detail: "Esta conta não tem permissão para acessar o painel." });
+      return false;
+    }
+    return true;
   } catch {
-    decoded = "";
-  }
-  const separator = decoded.indexOf(":");
-  const username = separator >= 0 ? decoded.slice(0, separator) : "";
-  const password = separator >= 0 ? decoded.slice(separator + 1) : "";
-
-  // Comparação simples adequada para um protótipo privado; use Auth dedicado
-  // e proteção contra tentativas repetidas antes de operar uma loja real.
-  if (username !== process.env.ADMIN_USERNAME || password !== process.env.ADMIN_PASSWORD) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="KRYPTO Admin"');
-    res.status(401).json({ detail: "Usuário ou senha incorretos." });
+    res.status(401).json({ detail: "Não foi possível validar a sessão. Entre novamente." });
     return false;
   }
-  return true;
 }
 
 module.exports = { getSupabase, sendError, requireMethod, requireAdmin };

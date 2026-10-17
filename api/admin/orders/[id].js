@@ -2,7 +2,7 @@ const { getSupabase, sendError, requireMethod, requireAdmin } = require("../../_
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["PATCH"])) return;
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
   try {
     const id = Number(req.query.id);
     const status = String((req.body || {}).status || "");

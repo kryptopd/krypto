@@ -6,7 +6,8 @@ const productForm = document.querySelector(".product-editor");
 const productFeedback = document.querySelector("#product-feedback");
 const productGrid = document.querySelector("#admin-products-grid");
 const ordersBody = document.querySelector("#orders-table-body");
-let authorization = "";
+let supabaseClient = null;
+let currentSession = null;
 let editingProductId = null;
 
 const money = (cents) =>
@@ -18,16 +19,10 @@ function setMessage(element, message, isError = false) {
   else delete element.dataset.error;
 }
 
-function basicHeader(username, password) {
-  const encoded = new TextEncoder().encode(`${username}:${password}`);
-  let binary = "";
-  encoded.forEach((byte) => { binary += String.fromCharCode(byte); });
-  return `Basic ${btoa(binary)}`;
-}
-
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
-  headers.set("Authorization", authorization);
+  if (!currentSession?.access_token) throw new Error("Sua sessão expirou. Entre novamente.");
+  headers.set("Authorization", `Bearer ${currentSession.access_token}`);
   const response = await fetch(path, { ...options, headers });
   if (response.status === 204) return null;
   const body = await response.json();
@@ -166,8 +161,14 @@ async function loadDashboard() {
   renderOrders(data.orders);
 }
 
-async function tryLogin(username, password) {
-  authorization = basicHeader(username, password);
+async function tryLogin(email, password) {
+  setMessage(loginFeedback, "Verificando acesso...");
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    setMessage(loginFeedback, "E-mail ou senha inválidos.", true);
+    return;
+  }
+  currentSession = data.session;
   try {
     await loadDashboard();
     loginSection.hidden = true;
@@ -175,8 +176,36 @@ async function tryLogin(username, password) {
     loginForm.elements.password.value = "";
     setMessage(loginFeedback, "");
   } catch (error) {
-    authorization = "";
+    await supabaseClient.auth.signOut();
+    currentSession = null;
     setMessage(loginFeedback, error.message, true);
+  }
+}
+
+async function initializeAdmin() {
+  try {
+    if (!window.supabase?.createClient) throw new Error("Não foi possível carregar o sistema de autenticação.");
+    const configResponse = await fetch("/api/config");
+    const config = await configResponse.json();
+    if (!configResponse.ok || !config.url || !config.anonKey) throw new Error("Configure SUPABASE_URL e SUPABASE_ANON_KEY na Vercel.");
+    supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+    const { data } = await supabaseClient.auth.getSession();
+    currentSession = data.session;
+    if (currentSession) {
+      try {
+        await loadDashboard();
+        loginSection.hidden = true;
+        adminMain.hidden = false;
+      } catch {
+        await supabaseClient.auth.signOut();
+        currentSession = null;
+      }
+    }
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      currentSession = session;
+    });
+  } catch (error) {
+    setMessage(loginFeedback, error.message || "Não foi possível iniciar o login.", true);
   }
 }
 
@@ -208,7 +237,8 @@ async function deleteProduct(product) {
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   setMessage(loginFeedback, "Verificando acesso...");
-  await tryLogin(loginForm.elements.username.value, loginForm.elements.password.value);
+  if (!supabaseClient) { setMessage(loginFeedback, "Autenticação ainda carregando. Tente novamente.", true); return; }
+  await tryLogin(loginForm.elements.email.value, loginForm.elements.password.value);
 });
 
 productForm.addEventListener("submit", async (event) => {
@@ -255,10 +285,13 @@ productForm.addEventListener("reset", () => {
   setMessage(productFeedback, "Produtos cadastrados ficam visíveis na vitrine.");
 });
 
-document.querySelector("#admin-logout").addEventListener("click", () => {
-  authorization = "";
+document.querySelector("#admin-logout").addEventListener("click", async () => {
+  if (supabaseClient) await supabaseClient.auth.signOut();
+  currentSession = null;
   adminMain.hidden = true;
   loginSection.hidden = false;
   loginForm.reset();
   setMessage(loginFeedback, "Você saiu do painel.");
 });
+
+initializeAdmin();

@@ -6,10 +6,10 @@ O visual original foi mantido. Este pacote adiciona uma API de servidor para a l
 - Catálogo público vindo do Supabase.
 - Criação de pedido de teste e baixa de estoque com função SQL transacional.
 - Painel admin para cadastrar, editar e desativar produtos e atualizar status de pedidos.
-- Segredos do Supabase usados apenas nas funções server-side da Vercel.
+- Chave service_role usada apenas nas funções server-side da Vercel; login do painel via Supabase Auth e token validado no backend.
 - Produtos de exemplo opcionais no `supabase/schema.sql`.
 
-> **Importante:** ainda é um protótipo. Não processa pagamento, não calcula frete e o painel usa autenticação Basic simples. Antes de vender de verdade, troque por autenticação robusta, proteção contra tentativas repetidas, política de privacidade/LGPD, logs e integração de pagamento.
+> **Importante:** ainda é um protótipo. Não processa pagamento nem calcula frete. O painel autentica com Supabase Auth e só aceita a conta cujo e-mail está em `ADMIN_EMAIL`. Antes de vender de verdade, adicione proteção contra tentativas repetidas, política de privacidade/LGPD, logs e integração de pagamento.
 
 ## 1. Criar o banco
 1. Crie um projeto no Supabase.
@@ -21,11 +21,13 @@ O visual original foi mantido. Este pacote adiciona uma API de servidor para a l
 2. Importe o repositório na Vercel. Framework preset: **Other**.
 3. Em **Project Settings → Environment Variables**, adicione:
    - `SUPABASE_URL`: URL do projeto Supabase.
+   - `SUPABASE_ANON_KEY`: chave pública `anon` (ou publishable) do projeto; pode ser exposta no frontend, pois as operações administrativas são protegidas no servidor.
    - `SUPABASE_SERVICE_ROLE_KEY`: chave `service_role` do projeto (segredo; nunca use em HTML/JS do navegador).
-   - `ADMIN_USERNAME`: usuário do painel.
-   - `ADMIN_PASSWORD`: senha longa e exclusiva para o painel.
-4. Faça redeploy depois de adicionar as variáveis.
-5. Abra o domínio da Vercel e teste a vitrine, checkout e `/admin.html`.
+   - `ADMIN_EMAIL`: e-mail exato da conta autorizada a entrar no painel.
+4. No Supabase, abra **Authentication → Users → Add user** e crie a conta do administrador com e-mail e senha fortes. Use esse mesmo e-mail em `ADMIN_EMAIL`. Não crie uma tela pública de cadastro para administradores.
+5. Em **Authentication → Settings** (ou Sign In / Providers, conforme a versão do painel), desative novos cadastros públicos se a loja não precisar de cadastro de clientes.
+6. Faça redeploy depois de adicionar as variáveis.
+7. Abra o domínio da Vercel e acesse `/admin.html`; entre com o e-mail e a senha criados em Supabase Auth.
 
 ## 3. Testar localmente (opcional)
 Requer Node.js instalado:
@@ -37,6 +39,7 @@ npx vercel dev
 Crie um `.env.local` com as mesmas quatro variáveis. Não envie `.env.local` ao Git.
 
 ## 4. Rotas incluídas
+- `GET /api/config` (entrega ao frontend apenas a URL do projeto e a chave pública anon)
 - `GET /api/products`
 - `POST /api/orders`
 - `GET /api/admin/dashboard`
@@ -49,5 +52,5 @@ Crie um `.env.local` com as mesmas quatro variáveis. Não envie `.env.local` ao
 - Pedidos guardam dados pessoais: use apenas dados fictícios nos testes.
 - Não existe gateway de pagamento nesta versão.
 - O checkout é de um produto por pedido, conforme o HTML atual.
-- O botão do painel usa as credenciais de `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
+- O painel usa Supabase Auth; o backend valida o token e permite somente o e-mail definido em `ADMIN_EMAIL`.
 - Se a Vercel mostrar 500/503, veja **Functions → Logs** e confirme as variáveis de ambiente.

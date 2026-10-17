@@ -2,7 +2,7 @@ const { getSupabase, sendError, requireMethod, requireAdmin } = require("../_lib
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["GET"])) return;
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
   try {
     const supabase = getSupabase();
     const [productsResult, ordersResult] = await Promise.all([
