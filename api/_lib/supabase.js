@@ -34,7 +34,8 @@ function requireAdmin(req, res) {
   const header = req.headers.authorization || "";
   const match = header.match(/^Basic\s+(.+)$/i);
   if (!match || !process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="KRYPTO Admin"');
+    // Não enviar WWW-Authenticate: Basic evita o popup nativo do navegador.
+    // A API continua protegida e retorna erro JSON para o formulário tratar.
     res.status(401).json({ detail: "Credenciais administrativas inválidas." });
     return false;
   }
@@ -52,11 +53,32 @@ function requireAdmin(req, res) {
   // Comparação simples adequada para um protótipo privado; use Auth dedicado
   // e proteção contra tentativas repetidas antes de operar uma loja real.
   if (username !== process.env.ADMIN_USERNAME || password !== process.env.ADMIN_PASSWORD) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="KRYPTO Admin"');
     res.status(401).json({ detail: "Usuário ou senha incorretos." });
     return false;
   }
   return true;
 }
 
-module.exports = { getSupabase, sendError, requireMethod, requireAdmin };
+
+function getSiteUrl(req) {
+  const configured = String(process.env.SITE_URL || "").trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  if (!host) {
+    const error = new Error("Configure SITE_URL com o domínio HTTPS da loja.");
+    error.statusCode = 503;
+    throw error;
+  }
+  return `${proto}://${host}`.replace(/^http:\/\/[^/]+\.vercel\.app/i, `https://${host}`);
+}
+function shippingConfig() {
+  const raw = process.env.KRYPTO_SHIPPING_CENTS;
+  if (raw === undefined || !/^\\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    const error = new Error("Configure KRYPTO_SHIPPING_CENTS na Vercel (frete fixo em centavos, ex.: 1990 para R$ 19,90).");
+    error.statusCode = 503;
+    throw error;
+  }
+  return { shipping_cents: Number(raw), shipping_name: process.env.KRYPTO_SHIPPING_NAME || "Frete padrão" };
+}
+module.exports = { getSupabase, sendError, requireMethod, requireAdmin, getSiteUrl, shippingConfig };

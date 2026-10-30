@@ -385,3 +385,12 @@ tbody tr:last-child td { border-bottom: 0; }
 .order-status.status-aguardando { color: #e8c47d; }
 .order-status.status-enviado { color: var(--green); }
 .order-status.status-cancelado { color: #ff9b9b; }
+
+/* Checkout, privacidade e documentos legais */
+.privacy-consent { display:flex; align-items:flex-start; gap:.65rem; line-height:1.5; }
+.privacy-consent input { margin-top:.25rem; flex:0 0 auto; }
+.privacy-consent a, .legal-links a { text-decoration:underline; }
+.legal-content { max-width: 850px; margin: 2rem auto; line-height: 1.75; }
+.legal-content h2 { margin: 2rem 0 .5rem; }
+.legal-content p { margin: 0 0 1rem; }
+.legal-links { display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; padding:1rem; font-size:.9rem; }

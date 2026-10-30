@@ -24,7 +24,7 @@
     <div class="checkout-heading">
       <span class="eyebrow"><span class="eyebrow-line"></span> QUASE SEU</span>
       <h1>Finalizar <span>pedido.</span></h1>
-      <p>Informe os dados para entrega. Esta página é separada da vitrine<br class="desktop-break"> e mantém o foco na conclusão da compra.</p>
+      <p>Informe seus dados para entrega e prossiga para o pagamento seguro.</p>
     </div>
     <div class="checkout-grid">
       <form class="customer-form" id="customer-form">
@@ -49,16 +49,17 @@
           <label class="field">Estado<input type="text" name="estado" placeholder="UF" autocomplete="address-level1" required></label>
           <label class="field field-full">CEP<input type="text" name="cep" placeholder="00000-000" inputmode="numeric" autocomplete="postal-code" required></label>
         </div>
-        <p class="form-note" id="checkout-feedback" role="status">Seus dados são usados apenas para este pedido de teste.</p>
-        <button class="button button-primary submit-order" type="submit">Criar pedido de teste <span aria-hidden="true">↗</span></button>
+        <label class="field field-full privacy-consent"><input type="checkbox" name="privacy_consent" id="privacy-consent" required> Li a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a> e entendo o uso dos meus dados para processar e entregar o pedido.</label>
+        <p class="form-note" id="checkout-feedback" role="status">Você será direcionado ao ambiente seguro do Mercado Pago para pagar.</p>
+        <button class="button button-primary submit-order" type="submit">Ir para pagamento <span aria-hidden="true">↗</span></button>
       </form>
       <aside class="order-summary">
         <h2>Resumo do pedido <span id="summary-quantity">1 item</span></h2>
         <div class="summary-item"><div class="summary-thumb" id="summary-thumb"></div><div><strong id="summary-name">Carregando catálogo...</strong><small id="summary-details"></small></div><b id="summary-price"></b></div>
         <div class="summary-line"><span>Subtotal</span><span id="summary-subtotal"></span></div>
-        <div class="summary-line"><span>Frete</span><span class="shipping-note">Não calculado neste teste</span></div>
+        <div class="summary-line"><span>Frete</span><span class="shipping-note" id="summary-shipping">Calculando…</span></div>
         <div class="summary-total"><span>Total do pedido</span><strong id="summary-total"></strong></div>
-        <p class="secure-note"><span>✳</span> Protótipo de teste. Nenhum pagamento será cobrado.</p>
+        <p class="secure-note"><span>✳</span> Pagamento processado com segurança pelo Mercado Pago.</p>
       </aside>
     </div>
   </main>

@@ -120,33 +120,47 @@ function renderOrders(orders) {
     const items = element("td", order.items || "—");
     const total = element("td");
     total.append(element("strong", money(order.total_cents)));
+    total.append(element("small", `Pagamento: ${order.payment_status || "pendente"}`));
+    if (order.shipping_provider || order.tracking_code) total.append(element("small", `${order.shipping_provider || "Entrega"} ${order.tracking_code || ""}`));
 
     const statusCell = element("td");
     const statusSelect = document.createElement("select");
     statusSelect.className = `order-status status-${order.status}`;
     [
-      ["aguardando", "Aguardando"],
-      ["confirmado", "Confirmado"],
+      ["aguardando", "Aguardando (pedido antigo)"],
+      ["aguardando_pagamento", "Aguardando pagamento"],
+      ["confirmado", "Pago/confirmado"],
+      ["preparando", "Em preparação"],
       ["enviado", "Enviado"],
+      ["entregue", "Entregue"],
       ["cancelado", "Cancelado"],
+      ["expirado", "Expirado"],
     ].forEach(([value, label]) => {
       const option = element("option", label);
       option.value = value;
       statusSelect.append(option);
     });
     statusSelect.value = order.status;
-    if (order.status === "cancelado") statusSelect.disabled = true;
+    if (["aguardando", "aguardando_pagamento", "confirmado", "cancelado", "expirado"].includes(order.status)) {
+      const protectedStatus = statusSelect.querySelector(`option[value="${order.status}"]`);
+      if (protectedStatus) protectedStatus.disabled = true;
+    }
+    if (["cancelado", "expirado"].includes(order.status)) statusSelect.disabled = true;
     statusSelect.addEventListener("change", async () => {
       statusSelect.disabled = true;
       try {
+        const trackingCode = statusSelect.value === "enviado"
+          ? window.prompt("Código de rastreamento (opcional):", order.tracking_code || "") : undefined;
+        const shippingProvider = statusSelect.value === "enviado"
+          ? window.prompt("Transportadora (opcional):", order.shipping_provider || "") : undefined;
         await api(`/api/admin/orders/${order.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: statusSelect.value }),
+          body: JSON.stringify({ status: statusSelect.value, ...(trackingCode !== undefined ? { tracking_code: trackingCode, shipping_provider: shippingProvider } : {}) }),
         });
         await loadDashboard();
       } catch (error) {
-        window.alert(error.message);
+        setMessage(productFeedback, error.message, true);
         await loadDashboard();
       }
     });
