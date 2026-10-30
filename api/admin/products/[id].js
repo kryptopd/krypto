@@ -2,7 +2,7 @@ const { getSupabase, sendError, requireMethod, requireAdmin } = require("../_lib
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["PUT", "DELETE"])) return;
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
   try {
     const id = Number(req.query.id);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ detail: "ID inválido." });

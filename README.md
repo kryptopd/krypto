@@ -20,7 +20,8 @@ Configure em Project Settings → Environment Variables, em todos os ambientes q
 - `KRYPTO_SHIPPING_CENTS`: frete fixo em centavos (ex.: `1990` = R$ 19,90; `0` = frete grátis).
 - `KRYPTO_SHIPPING_NAME`: nome do método de frete mostrado no gateway (ex.: `Frete padrão`).
 - `CRON_SECRET`: segredo aleatório para proteger a função de expiração de pedidos.
-- `ADMIN_USERNAME` e `ADMIN_PASSWORD`: mantenha somente se as rotas atuais do projeto ainda dependem dessas variáveis.
+- `SUPABASE_ANON_KEY`: chave publicável/anon para o formulário de login do Supabase Auth.
+- `ADMIN_EMAILS`: e-mail(s) autorizado(s) a administrar a loja, separados por vírgula (ex.: `voce@exemplo.com`). Precisa corresponder ao e-mail cadastrado em Supabase → Authentication → Users.
 
 Gere `CRON_SECRET` com `openssl rand -hex 32`. Não compartilhe tokens em mensagens nem os envie ao Git. Após configurar variáveis, faça redeploy.
 
@@ -70,3 +71,14 @@ A implementação de autenticação foi mantida sem alterações neste pacote, c
 - Revisão dos textos legais e política de retenção.
 
 **Importante:** código preparado não significa que o gateway, a conta de vendedor, o domínio, as credenciais ou os textos legais estejam aprovados/configurados. Faça testes em sandbox antes de vender.
+
+## Login do painel administrativo com Supabase Auth
+
+O painel `/admin.html` autentica por e-mail e senha usando Supabase Auth. Para configurar na Vercel, em **Settings → Environment Variables**, defina:
+
+- `SUPABASE_URL`: URL do projeto Supabase.
+- `SUPABASE_ANON_KEY`: chave publicável/anon do projeto (pode ser usada no navegador).
+- `SUPABASE_SERVICE_ROLE_KEY`: chave secreta usada somente nas funções de servidor. Nunca a coloque no HTML, JS público ou repositório.
+- `ADMIN_EMAILS`: lista separada por vírgulas dos e-mails que podem administrar a loja, por exemplo `voce@exemplo.com`. O endereço deve ser o mesmo da conta em **Supabase → Authentication → Users**.
+
+Depois de salvar as variáveis, faça novo deploy na Vercel. Usuários cadastrados no Supabase Auth só entram no painel se o e-mail também estiver listado em `ADMIN_EMAILS`. Se mudar o e-mail autorizado, atualize essa variável e redeploy. A chave `SUPABASE_ANON_KEY` não concede privilégios administrativos por si só; todas as APIs administrativas validam o token no servidor e verificam a lista permitida.
