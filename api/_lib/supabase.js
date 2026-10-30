@@ -30,33 +30,61 @@ function requireMethod(req, res, methods) {
   return true;
 }
 
-function requireAdmin(req, res) {
+async function requireAdmin(req, res) {
   const header = req.headers.authorization || "";
-  const match = header.match(/^Basic\s+(.+)$/i);
-  if (!match || !process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="KRYPTO Admin"');
-    res.status(401).json({ detail: "Credenciais administrativas inválidas." });
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    res.status(401).json({ detail: "Faça login com sua conta do Supabase Auth." });
     return false;
   }
 
-  let decoded;
+  const allowedEmails = String(process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  if (!allowedEmails.length) {
+    res.status(503).json({ detail: "Configure ADMIN_EMAILS na Vercel com o e-mail autorizado para administrar a loja." });
+    return false;
+  }
+
   try {
-    decoded = Buffer.from(match[1], "base64").toString("utf8");
-  } catch {
-    decoded = "";
-  }
-  const separator = decoded.indexOf(":");
-  const username = separator >= 0 ? decoded.slice(0, separator) : "";
-  const password = separator >= 0 ? decoded.slice(separator + 1) : "";
-
-  // Comparação simples adequada para um protótipo privado; use Auth dedicado
-  // e proteção contra tentativas repetidas antes de operar uma loja real.
-  if (username !== process.env.ADMIN_USERNAME || password !== process.env.ADMIN_PASSWORD) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="KRYPTO Admin"');
-    res.status(401).json({ detail: "Usuário ou senha incorretos." });
+    // Valida o token com o Supabase Auth no servidor; nunca confia no e-mail enviado pelo navegador.
+    const { data, error } = await getSupabase().auth.getUser(match[1]);
+    if (error || !data?.user?.email) {
+      res.status(401).json({ detail: "Sua sessão expirou ou é inválida. Entre novamente." });
+      return false;
+    }
+    if (!allowedEmails.includes(data.user.email.toLowerCase())) {
+      res.status(403).json({ detail: "Este usuário está autenticado, mas não tem permissão de administrador." });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("[KRYPTO AUTH] Falha ao validar sessão", error);
+    res.status(503).json({ detail: "Não foi possível validar o login no Supabase. Confira as configurações do servidor." });
     return false;
   }
-  return true;
 }
 
-module.exports = { getSupabase, sendError, requireMethod, requireAdmin };
+function getSiteUrl(req) {
+  const configured = String(process.env.SITE_URL || "").trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  if (!host) {
+    const error = new Error("Configure SITE_URL com o domínio HTTPS da loja.");
+    error.statusCode = 503;
+    throw error;
+  }
+  return `${proto}://${host}`.replace(/^http:\/\/[^/]+\.vercel\.app/i, `https://${host}`);
+}
+function shippingConfig() {
+  const raw = process.env.KRYPTO_SHIPPING_CENTS;
+  if (raw === undefined || !/^\\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    const error = new Error("Configure KRYPTO_SHIPPING_CENTS na Vercel (frete fixo em centavos, ex.: 1990 para R$ 19,90).");
+    error.statusCode = 503;
+    throw error;
+  }
+  return { shipping_cents: Number(raw), shipping_name: process.env.KRYPTO_SHIPPING_NAME || "Frete padrão" };
+}
+module.exports = { getSupabase, sendError, requireMethod, requireAdmin, getSiteUrl, shippingConfig };

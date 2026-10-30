@@ -23,9 +23,9 @@
   <section class="admin-login" id="admin-login">
     <span class="eyebrow"><span class="eyebrow-line"></span> ACESSO RESTRITO</span>
     <h1>Entrar no <span>painel.</span></h1>
-    <p>Use as credenciais administrativas configuradas no servidor.</p>
+    <p>Entre com o e-mail e a senha cadastrados no Supabase Auth. Seu e-mail também precisa estar autorizado como administrador.</p>
     <form id="admin-login-form">
-      <label class="field">Usuário<input name="username" autocomplete="username" required></label>
+      <label class="field">E-mail<input name="email" type="email" autocomplete="username" required></label>
       <label class="field">Senha<input name="password" type="password" autocomplete="current-password" required></label>
       <p class="form-note" id="admin-login-feedback" role="status"></p>
       <button class="button button-primary" type="submit">Acessar painel <span>↗</span></button>
@@ -83,6 +83,7 @@
     <p>PAINEL DE ADMINISTRAÇÃO · PROTÓTIPO</p>
     <small>© 2026 KRYPTO.</small>
   </footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="admin.js" defer></script>
 </body>
 </html>

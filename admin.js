@@ -7,6 +7,7 @@ const productFeedback = document.querySelector("#product-feedback");
 const productGrid = document.querySelector("#admin-products-grid");
 const ordersBody = document.querySelector("#orders-table-body");
 let authorization = "";
+let supabaseAuth = null;
 let editingProductId = null;
 
 const money = (cents) =>
@@ -16,13 +17,6 @@ function setMessage(element, message, isError = false) {
   element.textContent = message;
   if (isError) element.dataset.error = "true";
   else delete element.dataset.error;
-}
-
-function basicHeader(username, password) {
-  const encoded = new TextEncoder().encode(`${username}:${password}`);
-  let binary = "";
-  encoded.forEach((byte) => { binary += String.fromCharCode(byte); });
-  return `Basic ${btoa(binary)}`;
 }
 
 async function api(path, options = {}) {
@@ -120,33 +114,47 @@ function renderOrders(orders) {
     const items = element("td", order.items || "—");
     const total = element("td");
     total.append(element("strong", money(order.total_cents)));
+    total.append(element("small", `Pagamento: ${order.payment_status || "pendente"}`));
+    if (order.shipping_provider || order.tracking_code) total.append(element("small", `${order.shipping_provider || "Entrega"} ${order.tracking_code || ""}`));
 
     const statusCell = element("td");
     const statusSelect = document.createElement("select");
     statusSelect.className = `order-status status-${order.status}`;
     [
-      ["aguardando", "Aguardando"],
-      ["confirmado", "Confirmado"],
+      ["aguardando", "Aguardando (pedido antigo)"],
+      ["aguardando_pagamento", "Aguardando pagamento"],
+      ["confirmado", "Pago/confirmado"],
+      ["preparando", "Em preparação"],
       ["enviado", "Enviado"],
+      ["entregue", "Entregue"],
       ["cancelado", "Cancelado"],
+      ["expirado", "Expirado"],
     ].forEach(([value, label]) => {
       const option = element("option", label);
       option.value = value;
       statusSelect.append(option);
     });
     statusSelect.value = order.status;
-    if (order.status === "cancelado") statusSelect.disabled = true;
+    if (["aguardando", "aguardando_pagamento", "confirmado", "cancelado", "expirado"].includes(order.status)) {
+      const protectedStatus = statusSelect.querySelector(`option[value="${order.status}"]`);
+      if (protectedStatus) protectedStatus.disabled = true;
+    }
+    if (["cancelado", "expirado"].includes(order.status)) statusSelect.disabled = true;
     statusSelect.addEventListener("change", async () => {
       statusSelect.disabled = true;
       try {
+        const trackingCode = statusSelect.value === "enviado"
+          ? window.prompt("Código de rastreamento (opcional):", order.tracking_code || "") : undefined;
+        const shippingProvider = statusSelect.value === "enviado"
+          ? window.prompt("Transportadora (opcional):", order.shipping_provider || "") : undefined;
         await api(`/api/admin/orders/${order.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: statusSelect.value }),
+          body: JSON.stringify({ status: statusSelect.value, ...(trackingCode !== undefined ? { tracking_code: trackingCode, shipping_provider: shippingProvider } : {}) }),
         });
         await loadDashboard();
       } catch (error) {
-        window.alert(error.message);
+        setMessage(productFeedback, error.message, true);
         await loadDashboard();
       }
     });
@@ -166,9 +174,15 @@ async function loadDashboard() {
   renderOrders(data.orders);
 }
 
-async function tryLogin(username, password) {
-  authorization = basicHeader(username, password);
+async function tryLogin(email, password) {
+  if (!supabaseAuth) {
+    setMessage(loginFeedback, "Não foi possível iniciar o login do Supabase. Confira a configuração e recarregue a página.", true);
+    return;
+  }
   try {
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    authorization = `Bearer ${data.session.access_token}`;
     await loadDashboard();
     loginSection.hidden = true;
     adminMain.hidden = false;
@@ -176,7 +190,38 @@ async function tryLogin(username, password) {
     setMessage(loginFeedback, "");
   } catch (error) {
     authorization = "";
-    setMessage(loginFeedback, error.message, true);
+    if (supabaseAuth) await supabaseAuth.auth.signOut();
+    setMessage(loginFeedback, error.message || "Não foi possível entrar. Confira o e-mail, a senha e a autorização de administrador.", true);
+  }
+}
+
+async function initializeAuth() {
+  try {
+    if (!window.supabase?.createClient) throw new Error("Biblioteca de autenticação indisponível.");
+    const configResponse = await fetch("/api/auth/config", { cache: "no-store" });
+    const config = await configResponse.json();
+    if (!configResponse.ok) throw new Error(config.detail || "Configuração do Supabase incompleta.");
+    supabaseAuth = window.supabase.createClient(config.url, config.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
+    const { data: { session } } = await supabaseAuth.auth.getSession();
+    if (session?.access_token) {
+      authorization = `Bearer ${session.access_token}`;
+      try {
+        await loadDashboard();
+        loginSection.hidden = true;
+        adminMain.hidden = false;
+      } catch (error) {
+        authorization = "";
+        await supabaseAuth.auth.signOut();
+        setMessage(loginFeedback, error.message, true);
+      }
+    }
+    supabaseAuth.auth.onAuthStateChange((_event, sessionNow) => {
+      authorization = sessionNow?.access_token ? `Bearer ${sessionNow.access_token}` : "";
+    });
+  } catch (error) {
+    setMessage(loginFeedback, error.message || "Erro ao iniciar autenticação.", true);
   }
 }
 
@@ -208,7 +253,7 @@ async function deleteProduct(product) {
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   setMessage(loginFeedback, "Verificando acesso...");
-  await tryLogin(loginForm.elements.username.value, loginForm.elements.password.value);
+  await tryLogin(loginForm.elements.email.value.trim(), loginForm.elements.password.value);
 });
 
 productForm.addEventListener("submit", async (event) => {
@@ -255,10 +300,14 @@ productForm.addEventListener("reset", () => {
   setMessage(productFeedback, "Produtos cadastrados ficam visíveis na vitrine.");
 });
 
-document.querySelector("#admin-logout").addEventListener("click", () => {
+document.querySelector("#admin-logout").addEventListener("click", async () => {
   authorization = "";
+  if (supabaseAuth) await supabaseAuth.auth.signOut();
   adminMain.hidden = true;
   loginSection.hidden = false;
   loginForm.reset();
   setMessage(loginFeedback, "Você saiu do painel.");
 });
+
+
+initializeAuth();
