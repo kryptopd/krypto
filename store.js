@@ -12,6 +12,7 @@ function renderProducts() {
     (product) => !selectedCategory || product.category === selectedCategory,
   );
   productGrid.replaceChildren();
+  productGrid.removeAttribute("aria-busy");
 
   if (!visibleProducts.length) {
     const message = document.createElement("p");
@@ -24,16 +25,27 @@ function renderProducts() {
   }
 
   visibleProducts.forEach((product, index) => {
+    const soldOut = Number(product.stock) < 1;
     const card = document.createElement("article");
-    card.className = "product-card";
+    card.className = soldOut ? "product-card sold-out" : "product-card";
 
     const link = document.createElement("a");
     link.className = "product-image";
-    link.href = `checkout.html?product=${encodeURIComponent(product.id)}`;
-    link.setAttribute("aria-label", `Comprar ${product.name}`);
+    if (soldOut) {
+      link.href = "#colecao";
+      link.setAttribute("aria-label", `${product.name} — esgotado`);
+    } else {
+      link.href = `checkout.html?product=${encodeURIComponent(product.id)}`;
+      link.setAttribute("aria-label", `Comprar ${product.name}`);
+    }
     link.style.backgroundImage = `url("${product.image_url}")`;
 
-    if (product.tag) {
+    if (soldOut) {
+      const soldTag = document.createElement("span");
+      soldTag.className = "product-tag product-tag-sold";
+      soldTag.textContent = "ESGOTADO";
+      link.append(soldTag);
+    } else if (product.tag) {
       const tag = document.createElement("span");
       tag.className = "product-tag";
       if (index > 0) tag.classList.add("product-tag-muted");
@@ -48,7 +60,8 @@ function renderProducts() {
 
     const quickAdd = document.createElement("span");
     quickAdd.className = "quick-add";
-    quickAdd.append("VER PEÇA ", Object.assign(document.createElement("span"), { textContent: "↗" }));
+    if (soldOut) quickAdd.textContent = "SEM ESTOQUE";
+    else quickAdd.append("COMPRAR ", Object.assign(document.createElement("span"), { textContent: "↗" }));
     link.append(quickAdd);
 
     const details = document.createElement("div");
@@ -57,7 +70,9 @@ function renderProducts() {
     const name = document.createElement("h3");
     name.textContent = product.name;
     const summary = document.createElement("p");
-    summary.textContent = product.description || product.category.toUpperCase();
+    const lowStock = !soldOut && Number(product.stock) <= 3;
+    summary.textContent = lowStock ? `ÚLTIMAS ${product.stock} UNIDADES` : (product.description || product.category.toUpperCase());
+    if (lowStock) summary.className = "low-stock";
     description.append(name, summary);
 
     const price = document.createElement("strong");
@@ -86,6 +101,7 @@ fetch("/api/products")
   })
   .catch((error) => {
     productGrid.replaceChildren();
+    productGrid.removeAttribute("aria-busy");
     const message = document.createElement("p");
     message.className = "catalog-message";
     message.textContent = `${error.message} Tente novamente mais tarde.`;

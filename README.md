@@ -1,4 +1,14 @@
-# KRYPTO — loja virtual (Vercel + Supabase + Mercado Pago)
+# KRYPTO — loja virtual (Vercel + Supabase + PIX + Mercado Pago)
+
+## Pagamento por PIX (novo)
+
+O checkout oferece **PIX** (padrão) e, se `MERCADOPAGO_ACCESS_TOKEN` estiver configurado, também **cartão/outros via Mercado Pago**.
+
+- Depois de confirmar o pedido, o cliente vai para `pedido.html`, que mostra o valor exato, a chave PIX com botão de copiar e o passo a passo. A página se atualiza sozinha.
+- A chave padrão está em `api/_lib/supabase.js` (`DEFAULT_PIX_KEY`). Para trocar sem mexer no código, defina `PIX_KEY` na Vercel.
+- Como a chave PIX é estática, **não há confirmação automática**: confira o valor no app do banco e clique em **Confirmar PIX** no painel (`admin.html`) no pedido correspondente. Só depois o pedido pode ser preparado/enviado.
+- Pedidos PIX sem pagamento mantêm o estoque reservado por **24 horas** (Mercado Pago continua em 30 minutos). Para mudar, edite `expire_krypto_orders` em `supabase/migrations/20261105_pix.sql`.
+- **Obrigatório antes de publicar esta versão:** execute `supabase/migrations/20261105_pix.sql` no SQL Editor do Supabase. Sem ela, pedidos PIX são recusados com uma mensagem amigável.
 
 Este projeto implementa catálogo, checkout com criação de pedido, estoque reservado, pagamento Mercado Pago Checkout Pro, atualização de pagamento por webhook assinado, expiração de pedidos não pagos, consulta pública limitada do status, rastreamento manual e páginas-base de privacidade/termos.
 
@@ -6,7 +16,7 @@ Este projeto implementa catálogo, checkout com criação de pedido, estoque res
 
 ### 1. Banco de dados
 - Em um projeto Supabase novo, execute `supabase/schema.sql` no SQL Editor.
-- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
+- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql` e depois `supabase/migrations/20261105_pix.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
 - Não exponha `SUPABASE_SERVICE_ROLE_KEY` no navegador.
 
 ### 2. Variáveis de ambiente da Vercel
@@ -18,6 +28,7 @@ Configure em Project Settings → Environment Variables, em todos os ambientes q
 - `MERCADOPAGO_WEBHOOK_SECRET`: chave secreta gerada nas configurações de Webhooks do Mercado Pago.
 - `SITE_URL`: domínio HTTPS canônico da loja, sem barra no final (ex.: `https://sua-loja.vercel.app`).
 - `KRYPTO_SHIPPING_CENTS`: frete fixo em centavos (ex.: `1990` = R$ 19,90; `0` = frete grátis).
+- `PIX_KEY` (opcional): chave PIX que recebe os pagamentos; se omitida, usa a chave padrão do código.
 - `KRYPTO_SHIPPING_NAME`: nome do método de frete mostrado no gateway (ex.: `Frete padrão`).
 - `CRON_SECRET`: segredo aleatório para proteger a função de expiração de pedidos.
 - `SUPABASE_ANON_KEY`: chave publicável/anon para o formulário de login do Supabase Auth.

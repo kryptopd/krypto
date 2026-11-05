@@ -6,6 +6,8 @@ const productForm = document.querySelector(".product-editor");
 const productFeedback = document.querySelector("#product-feedback");
 const productGrid = document.querySelector("#admin-products-grid");
 const ordersBody = document.querySelector("#orders-table-body");
+const ordersFeedback = document.querySelector("#orders-feedback");
+const paymentLabels = { pending: "Pendente", approved: "Pago", rejected: "Recusado", cancelled: "Cancelado", refunded: "Reembolsado", charged_back: "Contestado", expired: "Expirado" };
 let authorization = "";
 let supabaseAuth = null;
 let editingProductId = null;
@@ -114,7 +116,9 @@ function renderOrders(orders) {
     const items = element("td", order.items || "—");
     const total = element("td");
     total.append(element("strong", money(order.total_cents)));
-    total.append(element("small", `Pagamento: ${order.payment_status || "pendente"}`));
+    const methodLabel = order.payment_method === "pix" ? "PIX" : "Mercado Pago";
+    const paymentLabel = paymentLabels[order.payment_status] || order.payment_status || "Pendente";
+    total.append(element("small", `${methodLabel} · ${paymentLabel}`));
     if (order.shipping_provider || order.tracking_code) total.append(element("small", `${order.shipping_provider || "Entrega"} ${order.tracking_code || ""}`));
 
     const statusCell = element("td");
@@ -154,11 +158,32 @@ function renderOrders(orders) {
         });
         await loadDashboard();
       } catch (error) {
-        setMessage(productFeedback, error.message, true);
+        setMessage(ordersFeedback, error.message, true);
         await loadDashboard();
       }
     });
     statusCell.append(statusSelect);
+    if (order.payment_method === "pix" && order.payment_status === "pending" && ["aguardando", "aguardando_pagamento"].includes(order.status)) {
+      const confirm = element("button", "Confirmar PIX", "button button-primary confirm-pix");
+      confirm.type = "button";
+      confirm.addEventListener("click", async () => {
+        if (!window.confirm(`Confirme que o PIX de ${money(order.total_cents)} do pedido #${order.public_id} (${order.customer_name}) já entrou na sua conta.`)) return;
+        confirm.disabled = true;
+        confirm.textContent = "Confirmando…";
+        try {
+          await api(`/api/admin/orders/${order.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "confirm_payment" }),
+          });
+          setMessage(ordersFeedback, `Pagamento do pedido #${order.public_id} confirmado.`);
+        } catch (error) {
+          setMessage(ordersFeedback, error.message, true);
+        }
+        await loadDashboard();
+      });
+      statusCell.append(confirm);
+    }
     row.append(id, customer, contact, address, items, total, statusCell);
     ordersBody.append(row);
   });
@@ -308,6 +333,17 @@ document.querySelector("#admin-logout").addEventListener("click", async () => {
   loginForm.reset();
   setMessage(loginFeedback, "Você saiu do painel.");
 });
-
+document.querySelector("#admin-refresh").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await loadDashboard();
+    setMessage(ordersFeedback, "Painel atualizado.");
+  } catch (error) {
+    setMessage(ordersFeedback, error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
 
 initializeAuth();

@@ -79,12 +79,24 @@ function getSiteUrl(req) {
   return `${proto}://${host}`.replace(/^http:\/\/[^/]+\.vercel\.app/i, `https://${host}`);
 }
 function shippingConfig() {
-  const raw = process.env.KRYPTO_SHIPPING_CENTS;
-  if (raw === undefined || !/^\\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+  const raw = String(process.env.KRYPTO_SHIPPING_CENTS ?? "").trim();
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
     const error = new Error("Configure KRYPTO_SHIPPING_CENTS na Vercel (frete fixo em centavos, ex.: 1990 para R$ 19,90).");
     error.statusCode = 503;
     throw error;
   }
   return { shipping_cents: Number(raw), shipping_name: process.env.KRYPTO_SHIPPING_NAME || "Frete padrão" };
 }
-module.exports = { getSupabase, sendError, requireMethod, requireAdmin, getSiteUrl, shippingConfig };
+// Chave PIX (chave aleatória) que recebe os pagamentos. Pode ser trocada pela variável PIX_KEY na Vercel.
+const DEFAULT_PIX_KEY = "4f5415bf-b519-4df0-a504-c9bc73de4699";
+function pixConfig() {
+  return {
+    pix_key: String(process.env.PIX_KEY || DEFAULT_PIX_KEY).trim(),
+    // Quanto tempo o estoque fica reservado para um pedido PIX aguardando pagamento (definido no SQL).
+    pix_reserve_hours: 24
+  };
+}
+function paymentMethods() {
+  return { pix: true, mercadopago: Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN) };
+}
+module.exports = { getSupabase, sendError, requireMethod, requireAdmin, getSiteUrl, shippingConfig, pixConfig, paymentMethods };

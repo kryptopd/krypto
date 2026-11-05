@@ -6,6 +6,12 @@
   <meta name="theme-color" content="#0b0a0e">
   <meta name="description" content="KRYPTO: moda urbana para quem faz as próprias regras.">
   <title>KRYPTO — Vista sua atitude</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:title" content="KRYPTO — Vista sua atitude">
+  <meta property="og:description" content="Moda urbana para quem faz as próprias regras. Peças limitadas, pague com PIX.">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,10 +28,16 @@
       <a href="#sobre">Manifesto</a>
       <a href="#contato">Contato</a>
     </nav>
-    <a class="header-cart" href="checkout.html" aria-label="Ir para a finalização do pedido">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 1.9-1.4L21 9H7M10 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" /></svg>
-      <span>Finalizar compra</span>
-    </a>
+    <div class="header-actions">
+      <a class="header-cart" href="checkout.html" aria-label="Ir para a finalização do pedido">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 1.9-1.4L21 9H7M10 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" /></svg>
+        <span>Finalizar compra</span>
+      </a>
+      <a class="header-admin" href="admin.html" aria-label="Ir para a página de administração">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 4.5 3.2 8.2 8 10 4.8-1.8 8-5.5 8-10V6l-8-3Zm0 6.2a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4Zm-3.6 7c.6-1.6 2-2.4 3.6-2.4s3 .8 3.6 2.4" /></svg>
+        <span>Admin</span>
+      </a>
+    </div>
   </header>
 
   <main>
@@ -36,6 +48,10 @@
         <p>Feita para quem não pede licença.<br>Moda urbana, identidade sem limites.</p>
         <a class="button button-primary" href="#colecao">Descobrir coleção <span aria-hidden="true">↗</span></a>
         <div class="hero-note"><span class="note-star">✳</span> Peças limitadas. Atitude ilimitada.</div>
+        <ul class="trust-row" aria-label="Vantagens da compra">
+          <li>Pague com PIX</li>
+          <li>Acompanhe seu pedido</li>
+        </ul>
       </div>
       <div class="hero-visual" role="img" aria-label="Modelo vestindo roupa urbana preta">
         <div class="hero-image"></div>
@@ -67,7 +83,9 @@
         <span class="sort-label">DROP 01 — 2026</span>
       </div>
 
-      <div class="product-grid" id="product-grid" aria-live="polite"></div>
+      <div class="product-grid" id="product-grid" aria-live="polite" aria-busy="true">
+        <div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div>
+      </div>
     </section>
 
     <section class="manifesto" id="sobre">

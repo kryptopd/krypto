@@ -56,6 +56,9 @@ alter table public.orders add column if not exists privacy_policy_version text n
 alter table public.orders add column if not exists tracking_code text;
 alter table public.orders add column if not exists shipping_provider text;
 alter table public.orders add column if not exists updated_at timestamptz not null default now();
+alter table public.orders add column if not exists payment_method text not null default 'mercadopago';
+alter table public.orders drop constraint if exists orders_payment_method_check;
+alter table public.orders add constraint orders_payment_method_check check (payment_method in ('mercadopago', 'pix'));
 alter table public.orders alter column public_id set default upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 12));
 update public.orders set subtotal_cents = total_cents where subtotal_cents = 0 and total_cents > 0;
 
@@ -221,7 +224,8 @@ as $$
 declare v_order public.orders%rowtype; v_item jsonb; v_count integer := 0;
 begin
   for v_order in select * from public.orders
-    where status='aguardando_pagamento' and payment_status in ('pending','rejected') and created_at < now() - interval '30 minutes'
+    where status='aguardando_pagamento' and payment_status in ('pending','rejected')
+    and created_at < now() - case when payment_method = 'pix' then interval '24 hours' else interval '30 minutes' end
     and inventory_released=false
     for update skip locked
   loop

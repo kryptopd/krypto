@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
     const stats = {
       product_count: products.filter((p) => p.active).length,
       order_count: allOrders.length,
-      pending_count: allOrders.filter((o) => o.status === "aguardando").length,
+      pending_count: allOrders.filter((o) => ["aguardando", "aguardando_pagamento"].includes(o.status)).length,
       sales_cents: allOrders.filter((o) => o.payment_status === "approved" && o.status !== "cancelado")
         .reduce((sum, o) => sum + Number(o.total_cents || 0), 0)
     };

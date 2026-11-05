@@ -215,6 +215,7 @@ $$;
 revoke all on function public.apply_krypto_payment(text,text,text,integer) from public, anon, authenticated;
 grant execute on function public.apply_krypto_payment(text,text,text,integer) to service_role;
 
+-- (Esta versão é anterior ao PIX. Depois dela, execute também 20261105_pix.sql.)
 create or replace function public.expire_krypto_orders()
 returns integer language plpgsql security definer set search_path = public
 as $$
