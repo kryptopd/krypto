@@ -16,7 +16,7 @@ Este projeto implementa catálogo, checkout com criação de pedido, estoque res
 
 ### 1. Banco de dados
 - Em um projeto Supabase novo, execute `supabase/schema.sql` no SQL Editor.
-- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql` e depois `supabase/migrations/20261105_pix.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
+- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql`, `20261105_pix.sql` e `20261106_shipping_cart_accounts.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
 - Não exponha `SUPABASE_SERVICE_ROLE_KEY` no navegador.
 
 ### 2. Variáveis de ambiente da Vercel
@@ -27,9 +27,7 @@ Configure em Project Settings → Environment Variables, em todos os ambientes q
 - `MERCADOPAGO_ACCESS_TOKEN`: Access Token da aplicação Mercado Pago. Comece com credenciais de teste; use produção só depois de validar o fluxo.
 - `MERCADOPAGO_WEBHOOK_SECRET`: chave secreta gerada nas configurações de Webhooks do Mercado Pago.
 - `SITE_URL`: domínio HTTPS canônico da loja, sem barra no final (ex.: `https://sua-loja.vercel.app`).
-- `KRYPTO_SHIPPING_CENTS`: frete fixo em centavos (ex.: `1990` = R$ 19,90; `0` = frete grátis).
 - `PIX_KEY` (opcional): chave PIX que recebe os pagamentos; se omitida, usa a chave padrão do código.
-- `KRYPTO_SHIPPING_NAME`: nome do método de frete mostrado no gateway (ex.: `Frete padrão`).
 - `CRON_SECRET`: segredo aleatório para proteger a função de expiração de pedidos.
 - `SUPABASE_ANON_KEY`: chave publicável/anon para o formulário de login do Supabase Auth.
 - `ADMIN_EMAILS`: e-mail(s) autorizado(s) a administrar a loja, separados por vírgula (ex.: `voce@exemplo.com`). Precisa corresponder ao e-mail cadastrado em Supabase → Authentication → Users.
@@ -46,8 +44,22 @@ Gere `CRON_SECRET` com `openssl rand -hex 32`. Não compartilhe tokens em mensag
 
 A aplicação verifica a assinatura do webhook e consulta o pagamento diretamente na API do Mercado Pago antes de atualizar o pedido. O retorno do navegador nunca é tratado como prova de pagamento.
 
-### 4. Frete e entrega
-Esta versão calcula **frete fixo configurável**, não cota automaticamente Correios/transportadoras. Defina `KRYPTO_SHIPPING_CENTS` com um valor que a operação consiga cumprir. O painel permite informar transportadora e rastreamento ao marcar o pedido como enviado. Para cotações reais, será necessário escolher um integrador/transportadora e configurar CEP de origem, peso e dimensões reais dos produtos.
+### 4. Frete e entrega (agora no painel)
+As variáveis `KRYPTO_SHIPPING_CENTS` e `KRYPTO_SHIPPING_NAME` **foram removidas** (pode apagá-las da Vercel). O frete é configurado em **admin → "Cálculo do frete"**:
+
+- **Por estado:** entrega ligada/desligada, frete grátis no estado, valor base (R$), valor por kg extra (R$) e prazo (dias). Há um botão para aplicar valores a todos os estados.
+- **Por peso:** cada produto tem um **peso em gramas** (campo no cadastro). Peso do pedido = soma das peças + peso da embalagem. Até o "peso coberto pelo valor base" cobra só o valor base; acima disso soma o valor por kg extra, por kg começado.
+- **Frete grátis:** para todos os pedidos (chave geral), por estado, ou a partir de um valor de compra.
+- O painel tem um **simulador**. O cálculo é feito no servidor (`api/_lib/shipping.js`); o navegador nunca envia o valor.
+- Enquanto o frete não for salvo pela primeira vez, o checkout avisa que o frete não está configurado (o painel mostra valores sugeridos por região para você revisar e salvar).
+
+Não cota Correios/transportadoras em tempo real; são tabelas suas. O painel continua permitindo informar transportadora e rastreamento.
+
+### Contas de clientes, sacola e acesso ao painel
+- A vitrine tem **sacola** (várias peças). "Fazer compra" leva a `conta.html` (abas Entrar / Cadastrar) se a pessoa não estiver logada; logada, vai ao checkout, que pergunta se quer usar o endereço salvo ou trocar (ou pede um, se não houver). O endereço fica nos metadados do usuário no Supabase Auth.
+- Em Supabase → Authentication, se "Confirm email" estiver ligado, o cliente precisa confirmar o e-mail antes de comprar (a tela avisa). Configure também a URL do site em Authentication → URL Configuration.
+- **Acesso ao admin:** não há mais botão visível. Na loja, clique **5 vezes seguidas no "©"** do rodapé (ou abra `/admin.html`). A segurança continua sendo o login + `ADMIN_EMAILS`; o e-mail do admin precisa estar confirmado no Supabase.
+- **Migração obrigatória:** execute `supabase/migrations/20261106_shipping_cart_accounts.sql` no SQL Editor antes de publicar (cria peso dos produtos, `store_settings`, vínculo pedido↔cliente e a função de pedido com várias peças).
 
 ### 5. LGPD e páginas comerciais
 - Complete todos os campos `[PREENCHER ...]` em `privacidade.html`, `termos.html` e `trocas-devolucoes.html`.
@@ -65,8 +77,8 @@ A implementação de autenticação foi mantida sem alterações neste pacote, c
 
 ### 7. Rotas
 - `GET /api/products`
-- `GET /api/shipping`
-- `POST /api/orders`
+- `GET /api/shipping` (info pública) e `GET /api/shipping?state=SP&items=1:2` (cotação); `PUT` (admin) salva as regras
+- `POST /api/orders` (exige cliente logado; `items` com várias peças)
 - `GET /api/orders/:id` (retorna status e valores, sem dados pessoais)
 - `POST /api/webhooks/mercadopago`
 - `GET /api/cron/expire-orders` (protegida por `CRON_SECRET`)

@@ -1,4 +1,5 @@
-const { getSupabase, sendError, requireMethod, getSiteUrl, shippingConfig, pixConfig } = require("./_lib/supabase");
+const { getSupabase, sendError, requireMethod, requireUser, getSiteUrl, pixConfig } = require("./_lib/supabase");
+const S = require("./_lib/shipping");
 
 function validEmail(value) {
   return typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -7,7 +8,9 @@ module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["POST"])) return;
   let createdPublicId = null;
   try {
-    const body = req.body || {}, customer = body.customer || {}, item = body.item || {};
+    const user = await requireUser(req, res);
+    if (!user) return;
+    const body = req.body || {}, customer = body.customer || {};
     // Sem o campo, mantém o comportamento anterior (Mercado Pago).
     const paymentMethod = body.payment_method === "pix" ? "pix" : "mercadopago";
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
@@ -15,38 +18,54 @@ module.exports = async function handler(req, res) {
       const error = new Error("O pagamento por cartão ainda não está disponível. Escolha PIX ou tente novamente mais tarde.");
       error.statusCode = 503; throw error;
     }
-    const required = ["name", "email", "phone", "address", "address_number", "city", "state", "postal_code"];
-    for (const field of required) {
-      if (!String(customer[field] || "").trim()) return res.status(400).json({ detail: `Preencha o campo obrigatório: ${field}.` });
+    const required = { name: "nome", phone: "telefone", address: "endereço", address_number: "número", city: "cidade", state: "estado", postal_code: "CEP" };
+    for (const [field, label] of Object.entries(required)) {
+      if (!String(customer[field] || "").trim()) return res.status(400).json({ detail: `Preencha o campo obrigatório: ${label}.` });
     }
-    if (!validEmail(String(customer.email).trim())) return res.status(400).json({ detail: "Informe um e-mail válido." });
+    const uf = S.normalizeUf(customer.state);
+    if (!uf) return res.status(400).json({ detail: "Informe o estado com a sigla (UF), por exemplo SP." });
     if (String(customer.postal_code).replace(/\D/g, "").length !== 8) return res.status(400).json({ detail: "Informe um CEP válido com 8 números." });
     const phoneDigits = String(customer.phone).replace(/\D/g, "").length;
     if (phoneDigits < 10 || phoneDigits > 13) return res.status(400).json({ detail: "Informe um telefone válido com DDD." });
     if (body.privacy_consent !== true) return res.status(400).json({ detail: "É necessário confirmar a leitura da Política de Privacidade para concluir o pedido." });
-    const productId = Number(item.product_id), quantity = Number(item.quantity);
-    if (!Number.isSafeInteger(productId) || productId < 1 || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) {
-      return res.status(400).json({ detail: "Produto ou quantidade inválidos." });
+
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+    if (rawItems.length < 1 || rawItems.length > 20) return res.status(400).json({ detail: "Sua sacola está vazia ou tem itens demais." });
+    const items = rawItems.map((raw) => ({
+      product_id: Number(raw && raw.product_id), quantity: Number(raw && raw.quantity),
+      size: String((raw && raw.size) || "").trim().slice(0, 20)
+    }));
+    for (const it of items) {
+      if (!Number.isSafeInteger(it.product_id) || it.product_id < 1 || !Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 10) {
+        return res.status(400).json({ detail: "Produto ou quantidade inválidos na sacola." });
+      }
     }
-    const shipping = shippingConfig(), supabase = getSupabase();
+
+    const supabase = getSupabase();
+    // Frete calculado aqui (estado + peso + regras de frete grátis). O navegador nunca informa o valor.
+    const { configured, settings } = await S.readSettings(supabase);
+    if (!configured) return res.status(503).json({ detail: "A loja ainda não configurou o frete. Tente novamente em breve." });
+    const quote = S.computeQuote(settings, uf, await S.priceLines(supabase, items));
+
     const { error: expireError } = await supabase.rpc("expire_krypto_orders");
     if (expireError) throw expireError;
-    const { data, error } = await supabase.rpc("create_krypto_order", {
+    const { data, error } = await supabase.rpc("create_krypto_order_v2", {
       p_customer: {
-        name: String(customer.name).trim().slice(0, 160), email: String(customer.email).trim().slice(0, 254),
+        name: String(customer.name).trim().slice(0, 160), email: String(user.email).trim().slice(0, 254),
         phone: String(customer.phone).trim().slice(0, 40), address: String(customer.address).trim().slice(0, 200),
         address_number: String(customer.address_number).trim().slice(0, 30), complement: String(customer.complement || "").trim().slice(0, 120),
-        city: String(customer.city).trim().slice(0, 100), state: String(customer.state).trim().slice(0, 60),
+        city: String(customer.city).trim().slice(0, 100), state: uf,
         postal_code: String(customer.postal_code).replace(/\D/g, "").slice(0, 8)
       },
-      p_item: { product_id: productId, quantity, size: String(item.size || "").trim().slice(0, 20) },
-      p_shipping_cents: shipping.shipping_cents,
-      p_privacy_acknowledged: true
+      p_items: items,
+      p_shipping_cents: quote.shipping_cents,
+      p_privacy_acknowledged: true,
+      p_user_id: user.id
     });
     if (error) {
-      if (/OUT_OF_STOCK/.test(error.message || "")) return res.status(409).json({ detail: "Estoque insuficiente para essa quantidade." });
-      if (/PRODUCT_NOT_FOUND/.test(error.message || "")) return res.status(404).json({ detail: "Produto não encontrado ou indisponível." });
-      if (/INVALID_SIZE/.test(error.message || "")) return res.status(400).json({ detail: "Tamanho inválido para esse produto." });
+      if (/OUT_OF_STOCK/.test(error.message || "")) return res.status(409).json({ detail: "Uma das peças não tem estoque suficiente para essa quantidade. Ajuste a sacola." });
+      if (/PRODUCT_NOT_FOUND/.test(error.message || "")) return res.status(404).json({ detail: "Um produto da sacola não está mais disponível." });
+      if (/INVALID_SIZE/.test(error.message || "")) return res.status(400).json({ detail: "Tamanho inválido para um dos produtos." });
       throw error;
     }
     const order = Array.isArray(data) ? data[0] : data;
@@ -78,8 +97,11 @@ module.exports = async function handler(req, res) {
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         items: [
-          { id: String(productId), title: order.item_name, quantity, currency_id: "BRL", unit_price: order.unit_price_cents / 100 },
-          ...(shipping.shipping_cents > 0 ? [{ id: "shipping", title: shipping.shipping_name, quantity: 1, currency_id: "BRL", unit_price: shipping.shipping_cents / 100 }] : [])
+          ...order.order_items.map((line) => ({
+            id: String(line.product_id), title: `${line.name}${line.size ? ` (${line.size})` : ""}`.slice(0, 250),
+            quantity: line.quantity, currency_id: "BRL", unit_price: line.unit_price_cents / 100
+          })),
+          ...(quote.shipping_cents > 0 ? [{ id: "shipping", title: quote.name, quantity: 1, currency_id: "BRL", unit_price: quote.shipping_cents / 100 }] : [])
         ],
         payer: { name: String(customer.name).trim().slice(0, 160), email: String(customer.email).trim() },
         external_reference: order.public_id,
