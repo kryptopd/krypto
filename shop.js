@@ -1,4 +1,4 @@
-// Código compartilhado da vitrine: sacola (localStorage), sessão do cliente (Supabase Auth) e cabeçalho.
+// Código compartilhado da vitrine: sacola (localStorage), pedidos do cliente neste navegador (sem conta) e cabeçalho.
 (function () {
   const CART_KEY = "krypto-cart-v1";
   const money = (cents) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -52,53 +52,61 @@
     return productsPromise;
   }
 
-  // ---------- Conta do cliente ----------
-  let clientPromise = null;
-  function auth() {
-    if (!clientPromise) {
-      clientPromise = (async () => {
-        if (!window.supabase || !window.supabase.createClient) return null;
-        const r = await fetch("/api/auth/config", { cache: "no-store" });
-        if (!r.ok) return null;
-        const cfg = await r.json();
-        return window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
-      })().catch(() => null);
-    }
-    return clientPromise;
+  // ---------- Meus pedidos e dados de entrega (somente neste navegador, nada de conta/Supabase Auth) ----------
+  const ORDERS_KEY = "krypto-orders-v1", PROFILE_KEY = "krypto-profile-v1";
+  let memoryOrders = [], memoryProfile = null;
+  function readOrders() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(ORDERS_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed.filter((o) => o && /^[A-F0-9]{8,16}$/.test(String(o.id))) : [];
+    } catch (_) { return memoryOrders; }
   }
-  async function session() {
-    const client = await auth();
-    if (!client) return null;
-    const { data } = await client.auth.getSession();
-    return data && data.session ? data.session : null;
+  function writeOrders(list) {
+    memoryOrders = list;
+    try { localStorage.setItem(ORDERS_KEY, JSON.stringify(list)); } catch (_) { /* sem armazenamento: usa a memória */ }
+    window.dispatchEvent(new CustomEvent("krypto:orders"));
   }
-  const firstName = (user) => {
-    const full = (user && user.user_metadata && user.user_metadata.full_name) || (user && user.email) || "";
-    return String(full).split(/[\s@]/)[0];
+  const Orders = {
+    list: readOrders,
+    count: () => readOrders().length,
+    add(id) {
+      id = String(id || "").toUpperCase();
+      if (!/^[A-F0-9]{8,16}$/.test(id)) return;
+      const list = readOrders().filter((o) => o.id !== id);
+      list.unshift({ id, at: Date.now() });
+      writeOrders(list.slice(0, 20));
+    },
+    remove(id) { writeOrders(readOrders().filter((o) => o.id !== id)); }
   };
+  // Nome, e-mail, telefone e endereço usados na última compra, para não digitar de novo.
+  function readProfile() {
+    try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); return p && typeof p === "object" ? p : null; } catch (_) { return memoryProfile; }
+  }
+  function writeProfile(profile) {
+    memoryProfile = profile;
+    try { if (profile) localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); else localStorage.removeItem(PROFILE_KEY); } catch (_) {}
+  }
+  const Profile = { read: readProfile, write: writeProfile, clear: () => writeProfile(null) };
+
   // Só aceita destinos internos simples (ex.: checkout.html), nunca endereços externos.
   function safeNext(value, fallback) {
     return /^[a-z0-9_-]+\.html$/i.test(String(value || "")) ? value : fallback;
   }
-  async function goCheckout() {
-    const s = await session();
-    location.assign(s ? "checkout.html" : "conta.html?next=checkout.html");
-  }
+  function goCheckout() { location.assign("checkout.html"); }
 
-  // ---------- Cabeçalho (contador da sacola e conta) ----------
+  // ---------- Cabeçalho (contador da sacola e pedidos) ----------
   function refreshBadge() {
     const n = Cart.count();
     document.querySelectorAll("[data-cart-count]").forEach((el) => { el.textContent = String(n); el.hidden = n === 0; });
   }
-  async function refreshAccount() {
-    const s = await session();
-    document.querySelectorAll("[data-account-label]").forEach((el) => {
-      el.textContent = s ? `Olá, ${firstName(s.user)}` : "Entrar / Cadastrar";
-    });
+  function refreshAccount() {
+    const n = Orders.count();
+    document.querySelectorAll("[data-account-label]").forEach((el) => { el.textContent = n ? `Meus pedidos (${n})` : "Meus pedidos"; });
   }
   window.addEventListener("krypto:cart", refreshBadge);
   window.addEventListener("storage", (e) => { if (e.key === CART_KEY) refreshBadge(); });
-  document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); });
+  window.addEventListener("krypto:orders", refreshAccount);
+document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); });
 
-  window.Krypto = { money, Cart, loadProducts, auth, session, firstName, safeNext, goCheckout, refreshAccount };
+  window.Krypto = { money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
 })();

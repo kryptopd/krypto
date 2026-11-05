@@ -1,5 +1,29 @@
 const { getSupabase, sendError, requireMethod, pixConfig } = require("../_lib/supabase");
-const BASE_COLUMNS = "public_id,status,payment_status,subtotal_cents,shipping_cents,total_cents,created_at,tracking_code,shipping_provider";
+const { buildPixPayload } = require("../_lib/pix");
+const BASE_COLUMNS = "public_id,status,payment_status,subtotal_cents,shipping_cents,total_cents,created_at,tracking_code,shipping_provider,items";
+
+// Dados públicos do pedido (sem endereço, telefone ou e-mail). Usado por pedido.html e pelo painel "Meus pedidos".
+function publicOrder(row) {
+  const result = {
+    public_id: row.public_id, status: row.status, payment_status: row.payment_status,
+    subtotal_cents: row.subtotal_cents, shipping_cents: row.shipping_cents, total_cents: row.total_cents,
+    created_at: row.created_at, tracking_code: row.tracking_code, shipping_provider: row.shipping_provider,
+    payment_method: row.payment_method || "mercadopago",
+    items: (Array.isArray(row.items) ? row.items : []).map((i) => ({ name: i.name, quantity: i.quantity, size: i.size || "" }))
+  };
+  if (result.payment_method === "pix" && result.status === "aguardando_pagamento" && result.payment_status === "pending") {
+    const pix = pixConfig();
+    result.pix_key = pix.pix_key;
+    result.pix_reserve_hours = pix.pix_reserve_hours;
+    // Copia e Cola com o valor exato já dentro: o banco abre o pagamento com o total preenchido.
+    result.pix_payload = buildPixPayload({
+      key: pix.pix_key, amountCents: row.total_cents, merchantName: pix.merchant_name,
+      merchantCity: pix.merchant_city, txid: row.public_id
+    });
+  }
+  return result;
+}
+
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["GET"])) return;
   const publicId = String(req.query.id || "").trim().toUpperCase();
@@ -13,13 +37,9 @@ module.exports = async function handler(req, res) {
     }
     if (error) throw error;
     if (!data) return res.status(404).json({ detail: "Pedido não encontrado." });
-    const result = { ...data, payment_method: data.payment_method || "mercadopago" };
-    if (result.payment_method === "pix" && result.status === "aguardando_pagamento" && result.payment_status === "pending") {
-      const pix = pixConfig();
-      result.pix_key = pix.pix_key;
-      result.pix_reserve_hours = pix.pix_reserve_hours;
-    }
     res.setHeader("Cache-Control", "no-store");
-    return res.status(200).json(result);
+    return res.status(200).json(publicOrder(data));
   } catch (error) { return sendError(res, error); }
 };
+module.exports.publicOrder = publicOrder;
+module.exports.BASE_COLUMNS = BASE_COLUMNS;

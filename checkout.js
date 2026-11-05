@@ -13,8 +13,8 @@ const el = (tag, text, className) => {
   return n;
 };
 
-let client = null, user = null, products = [], info = null;
-let savedAddress = null;      // endereço guardado na conta do cliente
+let products = [], info = null;
+let savedAddress = null;      // dados da última compra, guardados só neste navegador
 let confirmed = null;         // endereço que será usado neste pedido
 let quote = null, quoteError = "", quoteSeq = 0, submitting = false;
 
@@ -124,11 +124,11 @@ async function refreshQuote() {
 
 // ---------- Endereço ----------
 function validAddress(a) {
-  return a && typeof a === "object" && ["name", "phone", "postal_code", "address", "address_number", "city", "state"].every((k) => String(a[k] || "").trim());
+  return a && typeof a === "object" && ["name", "email", "phone", "postal_code", "address", "address_number", "city", "state"].every((k) => String(a[k] || "").trim());
 }
 const formatCep = (v) => digits(v).replace(/^(\d{5})(\d{3})$/, "$1-$2");
 function addressText(a) {
-  return `${a.name} · ${a.phone}\n${a.address}, ${a.address_number}${a.complement ? ` — ${a.complement}` : ""}\n${a.city}/${a.state} · CEP ${formatCep(a.postal_code)}`;
+  return `${a.name} · ${a.phone}${a.email ? ` · ${a.email}` : ""}\n${a.address}, ${a.address_number}${a.complement ? ` — ${a.complement}` : ""}\n${a.city}/${a.state} · CEP ${formatCep(a.postal_code)}`;
 }
 function showSaved(address, isConfirmed) {
   $("#address-edit").hidden = true;
@@ -136,7 +136,7 @@ function showSaved(address, isConfirmed) {
   $("#address-saved-text").textContent = addressText(address);
   $("#address-saved").classList.toggle("is-confirmed", isConfirmed);
   $("#address-ok").hidden = !isConfirmed;
-  $("#address-question").textContent = isConfirmed ? "Endereço de entrega" : "Você já tem um endereço salvo. Deseja entregar nele ou trocar?";
+  $("#address-question").textContent = isConfirmed ? "Endereço de entrega" : "Usar os dados da sua última compra?";
   $("#address-keep").hidden = isConfirmed;
 }
 function showEditor(banner, canCancel) {
@@ -156,7 +156,7 @@ function setConfirmed(address) {
 
 function readAddressForm() {
   return {
-    name: fields.nome.value.trim(), phone: fields.telefone.value.trim(), postal_code: digits(fields.cep.value),
+    name: fields.nome.value.trim(), email: fields.email.value.trim(), phone: fields.telefone.value.trim(), postal_code: digits(fields.cep.value),
     address: fields.endereco.value.trim(), address_number: fields.numero.value.trim(),
     complement: fields.complemento.value.trim(), city: fields.cidade.value.trim(), state: fields.estado.value.trim().toUpperCase()
   };
@@ -164,6 +164,7 @@ function readAddressForm() {
 function addressProblem(a) {
   const fb = (field, message) => { field.focus(); return message; };
   if (a.name.length < 2) return fb(fields.nome, "Informe o nome de quem vai receber.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email)) return fb(fields.email, "Informe um e-mail válido.");
   if (digits(a.phone).length < 10) return fb(fields.telefone, "Informe um telefone com DDD.");
   if (a.postal_code.length !== 8) return fb(fields.cep, "Informe um CEP com 8 números.");
   if (!a.address) return fb(fields.endereco, "Informe a rua e o bairro.");
@@ -181,27 +182,18 @@ $("#address-change").addEventListener("click", () => {
   const previous = confirmed || savedAddress || {};
   confirmed = null; quote = null; quoteError = ""; quoteSeq++; clearMessage(); renderTotals();
   fields.nome.value = previous.name || fields.nome.value;
+  fields.email.value = previous.email || fields.email.value;
   fields.telefone.value = previous.phone || fields.telefone.value;
   ["cep", "endereco", "numero", "complemento", "cidade", "estado"].forEach((n) => { fields[n].value = ""; });
   showEditor("Informe o novo endereço de entrega.", true);
 });
 $("#address-cancel").addEventListener("click", () => { if (savedAddress) showSaved(savedAddress, false); });
-$("#address-save").addEventListener("click", async () => {
-  const fb = $("#address-feedback"), btn = $("#address-save");
+$("#address-save").addEventListener("click", () => {
+  const fb = $("#address-feedback");
   const address = readAddressForm();
   const problem = addressProblem(address);
   if (problem) { fb.textContent = problem; fb.dataset.error = "true"; return; }
-  btn.disabled = true; fb.textContent = "Salvando…"; delete fb.dataset.error;
-  try {
-    const { data, error } = await client.auth.updateUser({ data: { address } });
-    if (error) throw error;
-    user = data.user || user;
-    savedAddress = address;
-  } catch (_) {
-    // Não conseguiu guardar na conta, mas o endereço vale para este pedido.
-    savedAddress = savedAddress || null;
-  }
-  btn.disabled = false;
+  fb.textContent = ""; delete fb.dataset.error;
   setConfirmed(address);
 });
 
@@ -271,23 +263,22 @@ form.addEventListener("submit", async (event) => {
   submitButton.textContent = method === "pix" ? "Criando seu pedido…" : "Preparando pagamento…";
   clearMessage();
   try {
-    const session = await K.session();
-    if (!session) { location.assign("conta.html?next=checkout.html"); return; }
     const payload = {
-      privacy_consent: true, payment_method: method,
+      privacy_consent: true, payment_method: method, website: form.elements.website.value,
       customer: {
-        name: confirmed.name, phone: confirmed.phone, address: confirmed.address, address_number: confirmed.address_number,
+        name: confirmed.name, email: confirmed.email, phone: confirmed.phone, address: confirmed.address, address_number: confirmed.address_number,
         complement: confirmed.complement || "", city: confirmed.city, state: confirmed.state, postal_code: confirmed.postal_code
       },
       items: states.map((st) => ({ product_id: st.line.product_id, quantity: st.qty, size: st.line.size }))
     };
     const response = await fetch("/api/orders", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(payload)
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
     });
     const result = await response.json().catch(() => ({}));
-    if (response.status === 401 && result.code === "LOGIN_REQUIRED") { location.assign("conta.html?next=checkout.html"); return; }
     if (!response.ok) throw new Error(result.detail || "Não foi possível criar o pedido. Tente novamente.");
     Cart.clear();
+    K.Orders.add(result.id);          // aparece em "Meus pedidos" neste aparelho
+    K.Profile.write(confirmed);       // próxima compra já vem com os dados preenchidos
     if (result.payment_method === "pix") {
       clearMessage("Pedido criado! Abrindo a chave PIX…");
       location.assign(`pedido.html?order=${encodeURIComponent(result.id)}&new=1`);
@@ -303,10 +294,6 @@ form.addEventListener("submit", async (event) => {
 
 // ---------- Início ----------
 (async function init() {
-  const session = await K.session();
-  if (!session) { location.replace("conta.html?next=checkout.html"); return; }
-  client = await K.auth(); user = session.user;
-  $("#checkout-hello").textContent = `Olá, ${K.firstName(user)}! Confira as peças, o endereço de entrega e escolha como quer pagar.`;
   try {
     const [list, infoResponse] = await Promise.all([K.loadProducts(true), fetch("/api/shipping", { cache: "no-store" })]);
     products = list;
@@ -315,11 +302,10 @@ form.addEventListener("submit", async (event) => {
   $("#mp-option").hidden = !(info && info.payment_methods && info.payment_methods.mercadopago);
   if (info && !info.configured) showError("A loja ainda não configurou o frete. Volte em breve.");
 
-  const stored = user.user_metadata && user.user_metadata.address;
+  const stored = K.Profile.read();
   savedAddress = validAddress(stored) ? stored : null;
-  fields.nome.value = (user.user_metadata && user.user_metadata.full_name) || "";
   renderItems();
   if (savedAddress) showSaved(savedAddress, false);
-  else showEditor("Você ainda não tem um endereço cadastrado. Informe onde vamos entregar sua compra.", false);
+  else showEditor("Informe seus dados e onde vamos entregar. Não precisa criar conta.", false);
   refreshButton();
 })();

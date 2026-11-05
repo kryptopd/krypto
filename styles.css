@@ -694,3 +694,46 @@ body.drawer-open { overflow: hidden; }
   .bag-thumb { width: 56px; height: 70px; }
 }
 @media (prefers-reduced-motion: reduce) { .product-card { transition: none; } }
+
+/* Meus pedidos (sem conta) */
+.orders-main { max-width: 760px; }
+.orders-toolbar { display: flex; justify-content: flex-end; margin: -6px 0 14px; }
+.orders-toolbar .button { min-height: 40px; font-size: 13px; }
+.orders-group h2 { margin: 22px 0 12px; font: 600 15px var(--font-display); letter-spacing: .04em; text-transform: uppercase; color: #bab4c1; }
+.order-card { display: grid; gap: 12px; padding: 18px; margin-bottom: 12px; border: 1px solid var(--border); background: #0e0d12; }
+.order-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.order-card-head strong { display: block; font: 600 16px var(--font-display); }
+.order-card-head small, .order-track { color: var(--muted); font-size: 12.5px; }
+.order-badge { padding: 5px 10px; font-size: 12px; font-weight: 700; border: 1px solid #4a2f6b; color: var(--purple-bright); white-space: nowrap; }
+.order-badge.phase-wait { color: #f5c26b; border-color: #6b5326; }
+.order-badge.phase-ship { color: #7cc4ff; border-color: #25506f; }
+.order-badge.phase-done { color: #6fe3a1; border-color: #25664a; }
+.order-badge.phase-bad { color: #ff8b8b; border-color: #6f2a2a; }
+.order-card-items { margin: 0; color: #b9b3c0; font-size: 14px; line-height: 1.55; }
+.order-mini-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.order-mini-steps li { padding-top: 12px; position: relative; font-size: 11px; text-align: center; color: #7a7482; }
+.order-mini-steps li::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: #26222c; }
+.order-mini-steps li.done { color: #d2cdd9; }
+.order-mini-steps li.done::before { background: var(--purple); }
+.order-mini-steps li.current { color: var(--purple-bright); font-weight: 700; }
+.order-card-foot { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.order-card-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.order-card-actions .button { min-height: 42px; font-size: 13.5px; }
+.orders-empty { padding: 18px; border: 1px dashed var(--border); margin-bottom: 16px; }
+.orders-empty p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.orders-recover { margin: 18px 0; border: 1px solid var(--border); padding: 14px 16px; }
+.orders-recover summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.orders-recover form { margin-top: 14px; }
+.orders-card .account-actions { margin-top: 20px; }
+/* PIX Copia e Cola + QR */
+#pix-payload { max-height: 84px; overflow: hidden; font-size: 12px; opacity: .85; }
+.pix-qr-box { display: grid; gap: 8px; justify-items: center; padding: 16px; border: 1px solid var(--border); background: #0e0d12; }
+.pix-qr-box small { color: var(--muted); font-size: 12px; }
+.pix-qr { width: 100%; max-width: 220px; padding: 8px; background: #fff; }
+.pix-qr svg { display: block; width: 100%; height: auto; }
+.pix-alt { padding: 12px 14px; border: 1px solid var(--border); background: #0e0d12; }
+.pix-alt summary { cursor: pointer; font-size: 13.5px; color: #bab4c1; }
+.pix-alt small { display: block; margin: 12px 0 8px; color: var(--muted); font-size: 12px; }
+.pix-alt code { display: block; padding: 12px; background: #17151c; border: 1px dashed #5b4380; font: 600 14px/1.45 ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+.pix-alt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 640px) { .order-mini-steps { grid-template-columns: 1fr; } .order-mini-steps li { text-align: left; } .pix-alt-actions { grid-template-columns: 1fr; } }

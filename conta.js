@@ -1,103 +1,112 @@
 const K = window.Krypto;
 const $ = (s) => document.querySelector(s);
-const next = K.safeNext(new URLSearchParams(location.search).get("next"), "index.html");
-const authCard = $("#auth-card"), loggedCard = $("#logged-card");
-const loginForm = $("#panel-login"), signupForm = $("#panel-signup");
-const tabs = { login: $("#tab-login"), signup: $("#tab-signup") };
-const panels = { login: loginForm, signup: signupForm };
+const listBox = $("#orders-list"), emptyBox = $("#orders-empty");
+const labels = { aguardando: "Aguardando pagamento", aguardando_pagamento: "Aguardando pagamento", confirmado: "Pagamento confirmado", preparando: "Em preparação", enviado: "A caminho", entregue: "Entregue", cancelado: "Cancelado", expirado: "Expirado" };
+// Texto curto e cor do selo para cada fase (em andamento, a caminho, finalizado...).
+const phase = (o) => {
+  if (["cancelado", "expirado"].includes(o.status)) return "bad";
+  if (o.status === "entregue") return "done";
+  if (o.status === "enviado") return "ship";
+  if (["aguardando", "aguardando_pagamento"].includes(o.status)) return "wait";
+  return "work";
+};
+const group = (o) => (["entregue", "cancelado", "expirado"].includes(o.status) ? "done" : "open");
+const stepIndex = { aguardando: 0, aguardando_pagamento: 0, confirmado: 1, preparando: 2, enviado: 3, entregue: 4 };
+const steps = ["Pedido", "Pago", "Preparando", "A caminho", "Entregue"];
+const el = (tag, text, className) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (className) n.className = className; return n; };
+function note(node, message, isError) { node.textContent = message; if (isError) node.dataset.error = "true"; else delete node.dataset.error; }
 
-function note(el, message, isError) { el.textContent = message; if (isError) el.dataset.error = "true"; else delete el.dataset.error; }
+let orders = [], timer = null;
 
-function showTab(which) {
-  Object.entries(tabs).forEach(([name, tab]) => { tab.setAttribute("aria-selected", String(name === which)); tab.tabIndex = name === which ? 0 : -1; });
-  Object.entries(panels).forEach(([name, panel]) => { panel.hidden = name !== which; });
-}
-Object.entries(tabs).forEach(([name, tab]) => tab.addEventListener("click", () => showTab(name)));
-document.querySelectorAll("[data-switch]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.switch)));
+function card(o) {
+  const article = el("article", undefined, `order-card phase-${phase(o)}`);
+  const head = el("div", undefined, "order-card-head");
+  const title = el("div");
+  title.append(el("strong", `Pedido #${o.public_id}`), el("small", o.created_at ? new Date(o.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : ""));
+  head.append(title, el("span", labels[o.status] || o.status, `order-badge phase-${phase(o)}`));
+  article.append(head);
 
-function friendly(error) {
-  const m = String((error && error.message) || "");
-  if (/invalid login credentials/i.test(m)) return "E-mail ou senha incorretos.";
-  if (/email not confirmed/i.test(m)) return "Confirme seu e-mail pelo link que enviamos e tente entrar de novo.";
-  if (/already registered|already been registered/i.test(m)) return "Este e-mail já tem cadastro. Use a aba Entrar.";
-  if (/password.*(short|least|weak)/i.test(m)) return "Use uma senha com pelo menos 8 caracteres.";
-  if (/rate limit|too many/i.test(m)) return "Muitas tentativas. Aguarde um pouco e tente de novo.";
-  if (/valid email|invalid email/i.test(m)) return "Informe um e-mail válido.";
-  return m || "Não foi possível concluir. Tente novamente.";
-}
+  const names = (o.items || []).map((i) => `${i.quantity}× ${i.name}${i.size ? ` (${i.size})` : ""}`);
+  if (names.length) article.append(el("p", names.join(" · "), "order-card-items"));
 
-function formatAddress(a) {
-  return `${a.address}, ${a.address_number}${a.complement ? ` — ${a.complement}` : ""}\n${a.city}/${a.state} · CEP ${String(a.postal_code).replace(/^(\d{5})(\d{3})$/, "$1-$2")}`;
-}
-function showLogged(session) {
-  authCard.hidden = true; loggedCard.hidden = false;
-  const user = session.user;
-  $("#logged-name").textContent = K.firstName(user);
-  $("#logged-email").textContent = user.email;
-  const address = user.user_metadata && user.user_metadata.address;
-  const box = $("#account-address");
-  box.replaceChildren();
-  const title = document.createElement("strong");
-  title.textContent = "Endereço de entrega";
-  const text = document.createElement("p");
-  text.textContent = address ? formatAddress(address) : "Nenhum endereço cadastrado ainda. Você poderá informar na hora de finalizar a compra.";
-  box.append(title, text);
-  $("#go-next").href = next;
-  if (next !== "index.html") $("#go-next").firstChild.textContent = "Continuar para a compra ";
-}
-
-loginForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const f = loginForm.elements, fb = $("#login-feedback"), btn = loginForm.querySelector('[type="submit"]');
-  if (!f.email.value.trim() || !f.password.value) return note(fb, "Informe e-mail e senha.", true);
-  const client = await K.auth();
-  if (!client) return note(fb, "O login não está disponível agora. Tente novamente em instantes.", true);
-  btn.disabled = true; note(fb, "Entrando…");
-  const { data, error } = await client.auth.signInWithPassword({ email: f.email.value.trim(), password: f.password.value });
-  btn.disabled = false;
-  if (error) return note(fb, friendly(error), true);
-  note(fb, "Pronto! Redirecionando…");
-  location.assign(next);
-});
-
-signupForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const f = signupForm.elements, fb = $("#signup-feedback"), btn = signupForm.querySelector('[type="submit"]');
-  if (f.name.value.trim().length < 2) return note(fb, "Informe seu nome.", true);
-  if (!f.email.value.trim()) return note(fb, "Informe seu e-mail.", true);
-  if (f.password.value.length < 8) return note(fb, "Use uma senha com pelo menos 8 caracteres.", true);
-  if (f.password.value !== f.password2.value) return note(fb, "As senhas não são iguais.", true);
-  if (!f.consent.checked) return note(fb, "Marque a confirmação de leitura da Política de Privacidade.", true);
-  const client = await K.auth();
-  if (!client) return note(fb, "O cadastro não está disponível agora. Tente novamente em instantes.", true);
-  btn.disabled = true; note(fb, "Criando sua conta…");
-  const { data, error } = await client.auth.signUp({
-    email: f.email.value.trim(), password: f.password.value,
-    options: { data: { full_name: f.name.value.trim() } }
-  });
-  btn.disabled = false;
-  if (error) return note(fb, friendly(error), true);
-  // Sem sessão: o projeto exige confirmar o e-mail. Com identities vazio: e-mail já cadastrado.
-  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-    return note(fb, "Este e-mail já tem cadastro. Use a aba Entrar.", true);
+  if (o.status in stepIndex) {
+    const bar = el("ol", undefined, "order-mini-steps");
+    steps.forEach((label, i) => { const li = el("li", label); if (i <= stepIndex[o.status]) li.className = i === stepIndex[o.status] ? "done current" : "done"; bar.append(li); });
+    article.append(bar);
   }
-  if (!data.session) {
-    return note(fb, "Conta criada! Enviamos um link de confirmação para o seu e-mail. Depois de confirmar, volte e entre.", false);
+  const foot = el("div", undefined, "order-card-foot");
+  foot.append(el("strong", K.money(o.total_cents)));
+  if (o.tracking_code) foot.append(el("small", `${o.shipping_provider || "Rastreio"}: ${o.tracking_code}`, "order-track"));
+  article.append(foot);
+
+  const actions = el("div", undefined, "order-card-actions");
+  const open = el("a", o.pix_payload ? "Pagar com PIX" : "Ver detalhes", o.pix_payload ? "button button-primary" : "button button-outline");
+  open.href = `pedido.html?order=${encodeURIComponent(o.public_id)}`;
+  actions.append(open);
+  const hide = el("button", "Remover da lista", "link-button"); hide.type = "button";
+  hide.addEventListener("click", () => { K.Orders.remove(o.public_id); orders = orders.filter((x) => x.public_id !== o.public_id); render(); K.refreshAccount(); });
+  actions.append(hide);
+  article.append(actions);
+  return article;
+}
+
+function section(title, list) {
+  const wrap = el("div", undefined, "orders-group");
+  wrap.append(el("h2", `${title} (${list.length})`));
+  list.forEach((o) => wrap.append(card(o)));
+  return wrap;
+}
+
+function render() {
+  listBox.replaceChildren();
+  emptyBox.hidden = orders.length > 0;
+  if (!orders.length) { $("#orders-recover").open = true; return; }
+  const open = orders.filter((o) => group(o) === "open"), done = orders.filter((o) => group(o) === "done");
+  if (open.length) listBox.append(section("Em andamento", open));
+  if (done.length) listBox.append(section("Finalizados", done));
+}
+
+async function load() {
+  const ids = K.Orders.list().map((o) => o.id);
+  if (!ids.length) { orders = []; return render(); }
+  try {
+    const response = await fetch("/api/orders/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }), cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || "Não foi possível consultar seus pedidos.");
+    orders = data.orders || [];
+    // Pedidos que não existem mais saem da lista deste aparelho.
+    const found = new Set(orders.map((o) => o.public_id));
+    ids.filter((id) => !found.has(id)).forEach((id) => K.Orders.remove(id));
+    render();
+  } catch (e) {
+    listBox.replaceChildren(el("p", e.message, "form-note"));
+    listBox.firstChild.dataset.error = "true";
   }
-  note(fb, "Conta criada! Redirecionando…");
-  location.assign(next);
+}
+
+// Atualiza sozinho a cada 30 s enquanto a aba está aberta e há pedido em andamento.
+function schedule() {
+  clearInterval(timer);
+  timer = setInterval(() => { if (!document.hidden && orders.some((o) => group(o) === "open")) load(); }, 30000);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+$("#orders-refresh").addEventListener("click", load);
+
+$("#recover-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget.elements, fb = $("#recover-feedback"), btn = e.currentTarget.querySelector('[type="submit"]');
+  if (!f.email.value.trim() || !f.code.value.trim()) return note(fb, "Informe o e-mail e o código do pedido.", true);
+  btn.disabled = true; note(fb, "Buscando…");
+  try {
+    const response = await fetch("/api/orders/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: f.email.value, code: f.code.value }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || "Não foi possível buscar o pedido.");
+    (data.orders || []).forEach((o) => K.Orders.add(o.public_id));
+    note(fb, "Pedido encontrado e adicionado à lista.");
+    f.code.value = "";
+    await load();
+  } catch (error) { note(fb, error.message, true); }
+  btn.disabled = false;
 });
 
-$("#logout").addEventListener("click", async () => {
-  const client = await K.auth();
-  if (client) await client.auth.signOut();
-  location.assign("conta.html");
-});
-
-(async function init() {
-  const session = await K.session();
-  if (session) return showLogged(session);
-  authCard.hidden = false;
-  if (next === "checkout.html") $("#auth-lead").textContent = "Para finalizar a compra, entre na sua conta ou crie um cadastro rápido. Suas peças continuam na sacola.";
-  if (new URLSearchParams(location.search).get("tab") === "signup") showTab("signup");
-})();
+load().then(schedule);

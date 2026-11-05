@@ -1,4 +1,5 @@
-const { getSupabase, sendError, requireMethod, requireUser, getSiteUrl, pixConfig } = require("./_lib/supabase");
+const { getSupabase, sendError, requireMethod, getSiteUrl, pixConfig } = require("./_lib/supabase");
+const { buildPixPayload } = require("./_lib/pix");
 const S = require("./_lib/shipping");
 
 function validEmail(value) {
@@ -8,9 +9,9 @@ module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["POST"])) return;
   let createdPublicId = null;
   try {
-    const user = await requireUser(req, res);
-    if (!user) return;
+    // Compra sem cadastro: nada é gravado no Supabase Auth. O pedido guarda nome, e-mail e endereço só para entrega.
     const body = req.body || {}, customer = body.customer || {};
+    if (String(body.website || "").trim()) return res.status(400).json({ detail: "Requisição inválida." }); // campo isca anti-robô
     // Sem o campo, mantém o comportamento anterior (Mercado Pago).
     const paymentMethod = body.payment_method === "pix" ? "pix" : "mercadopago";
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
@@ -18,10 +19,12 @@ module.exports = async function handler(req, res) {
       const error = new Error("O pagamento por cartão ainda não está disponível. Escolha PIX ou tente novamente mais tarde.");
       error.statusCode = 503; throw error;
     }
-    const required = { name: "nome", phone: "telefone", address: "endereço", address_number: "número", city: "cidade", state: "estado", postal_code: "CEP" };
+    const required = { name: "nome", email: "e-mail", phone: "telefone", address: "endereço", address_number: "número", city: "cidade", state: "estado", postal_code: "CEP" };
     for (const [field, label] of Object.entries(required)) {
       if (!String(customer[field] || "").trim()) return res.status(400).json({ detail: `Preencha o campo obrigatório: ${label}.` });
     }
+    const buyerEmail = String(customer.email).trim().toLowerCase();
+    if (!validEmail(buyerEmail)) return res.status(400).json({ detail: "Informe um e-mail válido." });
     const uf = S.normalizeUf(customer.state);
     if (!uf) return res.status(400).json({ detail: "Informe o estado com a sigla (UF), por exemplo SP." });
     if (String(customer.postal_code).replace(/\D/g, "").length !== 8) return res.status(400).json({ detail: "Informe um CEP válido com 8 números." });
@@ -49,9 +52,14 @@ module.exports = async function handler(req, res) {
 
     const { error: expireError } = await supabase.rpc("expire_krypto_orders");
     if (expireError) throw expireError;
+    // Sem login, limita pedidos em aberto por e-mail para ninguém travar o estoque da loja.
+    const { count: openOrders, error: openError } = await supabase.from("orders").select("id", { count: "exact", head: true })
+      .eq("email", buyerEmail).eq("status", "aguardando_pagamento").eq("payment_status", "pending");
+    if (openError) throw openError;
+    if ((openOrders || 0) >= 3) return res.status(429).json({ detail: "Você já tem 3 pedidos aguardando pagamento. Pague ou aguarde expirarem para fazer outro." });
     const { data, error } = await supabase.rpc("create_krypto_order_v2", {
       p_customer: {
-        name: String(customer.name).trim().slice(0, 160), email: String(user.email).trim().slice(0, 254),
+        name: String(customer.name).trim().slice(0, 160), email: buyerEmail,
         phone: String(customer.phone).trim().slice(0, 40), address: String(customer.address).trim().slice(0, 200),
         address_number: String(customer.address_number).trim().slice(0, 30), complement: String(customer.complement || "").trim().slice(0, 120),
         city: String(customer.city).trim().slice(0, 100), state: uf,
@@ -60,7 +68,7 @@ module.exports = async function handler(req, res) {
       p_items: items,
       p_shipping_cents: quote.shipping_cents,
       p_privacy_acknowledged: true,
-      p_user_id: user.id
+      p_user_id: null
     });
     if (error) {
       if (/OUT_OF_STOCK/.test(error.message || "")) return res.status(409).json({ detail: "Uma das peças não tem estoque suficiente para essa quantidade. Ajuste a sacola." });
@@ -87,7 +95,8 @@ module.exports = async function handler(req, res) {
       return res.status(201).json({
         id: order.public_id, payment_method: "pix", subtotal_cents: order.subtotal_cents,
         shipping_cents: order.shipping_cents, total_cents: order.total_cents,
-        pix_key: pix.pix_key, pix_reserve_hours: pix.pix_reserve_hours
+        pix_key: pix.pix_key, pix_reserve_hours: pix.pix_reserve_hours,
+        pix_payload: buildPixPayload({ key: pix.pix_key, amountCents: order.total_cents, merchantName: pix.merchant_name, merchantCity: pix.merchant_city, txid: order.public_id })
       });
     }
 
@@ -103,7 +112,7 @@ module.exports = async function handler(req, res) {
           })),
           ...(quote.shipping_cents > 0 ? [{ id: "shipping", title: quote.name, quantity: 1, currency_id: "BRL", unit_price: quote.shipping_cents / 100 }] : [])
         ],
-        payer: { name: String(customer.name).trim().slice(0, 160), email: String(customer.email).trim() },
+        payer: { name: String(customer.name).trim().slice(0, 160), email: buyerEmail },
         external_reference: order.public_id,
         notification_url: `${siteUrl}/api/webhooks/mercadopago`,
         back_urls: {

@@ -188,13 +188,8 @@ overlay.addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) closeDrawer(); });
 window.addEventListener("krypto:cart", () => { if (!drawer.hidden) renderDrawer(); });
 
-// "Fazer compra": sem conta/login vai para a tela de entrar/cadastrar; logado segue para o checkout.
-document.querySelector("#drawer-buy").addEventListener("click", async (e) => {
-  const button = e.currentTarget;
-  button.disabled = true;
-  await window.Krypto.goCheckout();
-  setTimeout(() => { button.disabled = false; }, 4000);
-});
+// "Fazer compra": vai direto ao checkout, sem cadastro.
+document.querySelector("#drawer-buy").addEventListener("click", () => window.Krypto.goCheckout());
 
 // ---------- Faixa de avisos (frete grátis, se a loja tiver) ----------
 fetch("/api/shipping").then((r) => (r.ok ? r.json() : null)).then((info) => {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0b0a0e">
   <meta name="robots" content="noindex">
-  <title>Entrar ou cadastrar — KRYPTO</title>
+  <title>Meus pedidos — KRYPTO</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,50 +18,31 @@
       <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
       <span>KRYPTO<span class="brand-dot">.</span></span>
     </a>
-    <span class="checkout-step"><span>00</span> MINHA CONTA</span>
+    <span class="checkout-step"><span>00</span> MEUS PEDIDOS</span>
     <a class="admin-store-link" href="index.html">← Voltar para a loja</a>
   </header>
 
-  <main class="account-main">
-    <section class="account-card" id="auth-card" aria-labelledby="auth-title" hidden>
-      <span class="eyebrow"><span class="eyebrow-line"></span> SUA CONTA KRYPTO</span>
-      <h1 id="auth-title">Entre para <span>comprar.</span></h1>
-      <p class="account-lead" id="auth-lead">Você escolhe as peças sem precisar de conta. Para finalizar a compra, entre ou crie seu cadastro.</p>
-
-      <div class="auth-tabs" role="tablist" aria-label="Entrar ou cadastrar">
-        <button type="button" role="tab" id="tab-login" aria-selected="true" aria-controls="panel-login">Entrar</button>
-        <button type="button" role="tab" id="tab-signup" aria-selected="false" aria-controls="panel-signup" tabindex="-1">Cadastrar</button>
+  <main class="account-main orders-main">
+    <section class="account-card orders-card" aria-labelledby="orders-title">
+      <span class="eyebrow"><span class="eyebrow-line"></span> MEUS PEDIDOS</span>
+      <h1 id="orders-title">Acompanhe suas <span>compras.</span></h1>
+      <p class="account-lead">Sem cadastro e sem senha: os pedidos feitos neste aparelho aparecem aqui e o status é atualizado sozinho.</p>
+      <div class="orders-toolbar"><button class="button button-outline" id="orders-refresh" type="button">Atualizar agora</button></div>
+      <div class="orders-list" id="orders-list" aria-live="polite"></div>
+      <div class="orders-empty" id="orders-empty" hidden>
+        <strong>Nenhum pedido neste aparelho</strong>
+        <p>Fez uma compra em outro celular ou computador? Recupere abaixo com o e-mail e o código do pedido.</p>
       </div>
-
-      <form class="auth-form" id="panel-login" role="tabpanel" aria-labelledby="tab-login" novalidate>
-        <label class="field">E-mail<input name="email" type="email" autocomplete="username" inputmode="email" placeholder="voce@email.com" required></label>
-        <label class="field">Senha<input name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required></label>
-        <p class="form-note" id="login-feedback" role="status" aria-live="polite"></p>
-        <button class="button button-primary" type="submit">Entrar <span aria-hidden="true">↗</span></button>
-        <p class="auth-switch">Primeira vez aqui? <button type="button" class="link-button" data-switch="signup">Criar conta</button></p>
-      </form>
-
-      <form class="auth-form" id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" hidden novalidate>
-        <label class="field">Nome completo<input name="name" type="text" autocomplete="name" placeholder="Como podemos te chamar?" required></label>
-        <label class="field">E-mail<input name="email" type="email" autocomplete="email" inputmode="email" placeholder="voce@email.com" required></label>
-        <label class="field">Senha <span class="optional">(mínimo 8 caracteres)</span><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="Crie uma senha" required></label>
-        <label class="field">Repita a senha<input name="password2" type="password" autocomplete="new-password" minlength="8" placeholder="Digite a senha de novo" required></label>
-        <label class="field field-full privacy-consent"><input type="checkbox" name="consent" required> <span>Li a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a> e os <a href="termos.html" target="_blank" rel="noopener">Termos de compra</a>.</span></label>
-        <p class="form-note" id="signup-feedback" role="status" aria-live="polite"></p>
-        <button class="button button-primary" type="submit">Criar minha conta <span aria-hidden="true">↗</span></button>
-        <p class="auth-switch">Já tem conta? <button type="button" class="link-button" data-switch="login">Entrar</button></p>
-      </form>
-    </section>
-
-    <section class="account-card" id="logged-card" aria-labelledby="logged-title" hidden>
-      <span class="eyebrow"><span class="eyebrow-line"></span> MINHA CONTA</span>
-      <h1 id="logged-title">Olá, <span id="logged-name">cliente</span>.</h1>
-      <p class="account-lead" id="logged-email"></p>
-      <div class="account-address" id="account-address"></div>
-      <div class="account-actions">
-        <a class="button button-primary" id="go-next" href="index.html">Continuar comprando <span aria-hidden="true">↗</span></a>
-        <button class="button button-outline" id="logout" type="button">Sair da conta</button>
-      </div>
+      <details class="orders-recover" id="orders-recover">
+        <summary>Recuperar um pedido</summary>
+        <form class="auth-form" id="recover-form" novalidate>
+          <label class="field">E-mail usado na compra<input name="email" type="email" inputmode="email" autocomplete="email" placeholder="voce@email.com" required></label>
+          <label class="field">Código do pedido<input name="code" type="text" autocomplete="off" placeholder="Ex.: A1B2C3D4" required></label>
+          <p class="form-note" id="recover-feedback" role="status" aria-live="polite"></p>
+          <button class="button button-primary" type="submit">Buscar pedido <span aria-hidden="true">↗</span></button>
+        </form>
+      </details>
+      <div class="account-actions"><a class="button button-primary" href="index.html#colecao">Continuar comprando <span aria-hidden="true">↗</span></a></div>
     </section>
   </main>
 
@@ -70,7 +51,6 @@
     <p>VISTA SUA ATITUDE. DESDE 2024.</p>
     <small>© 2026 KRYPTO.</small>
   </footer>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.js"></script>
   <script src="shop.js"></script>
   <script src="conta.js" defer></script>
 </body>

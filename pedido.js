@@ -1,8 +1,8 @@
 const money = (c) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(c / 100);
 const params = new URLSearchParams(location.search), id = params.get("order"), isNew = params.get("new") === "1";
-const labels = { aguardando: "Aguardando pagamento", aguardando_pagamento: "Aguardando pagamento", confirmado: "Pagamento confirmado", preparando: "Em preparação", enviado: "Enviado", entregue: "Entregue", cancelado: "Cancelado", expirado: "Expirado" };
+const labels = { aguardando: "Aguardando pagamento", aguardando_pagamento: "Aguardando pagamento", confirmado: "Pagamento confirmado", preparando: "Em preparação", enviado: "A caminho", entregue: "Entregue", cancelado: "Cancelado", expirado: "Expirado" };
 const paymentLabels = { pending: "Pendente", approved: "Aprovado", rejected: "Recusado", cancelled: "Cancelado", refunded: "Reembolsado", charged_back: "Contestação/chargeback", expired: "Expirado" };
-const steps = ["Pedido criado", "Pagamento confirmado", "Em preparação", "Enviado", "Entregue"];
+const steps = ["Pedido criado", "Pagamento confirmado", "Em preparação", "A caminho", "Entregue"];
 const stepIndex = { aguardando: 0, aguardando_pagamento: 0, confirmado: 1, preparando: 2, enviado: 3, entregue: 4 };
 const $ = (selector) => document.querySelector(selector);
 let pollTimer = null, latest = null;
@@ -27,13 +27,26 @@ function messageFor(data) {
     return data.payment_method === "pix"
       ? "Este pedido não está mais ativo. Se você já fez o PIX, fale com a loja informando o código do pedido."
       : "Este pedido não está ativo. Se houve cobrança, entre em contato com a loja.";
-  if (data.payment_status === "approved") return data.status === "enviado" ? "Seu pedido foi enviado. Obrigado por comprar na KRYPTO!" : "Pagamento confirmado. Obrigado por comprar na KRYPTO!";
-  if (data.pix_key) return isNew ? "Pedido criado! Agora é só pagar com PIX usando a chave abaixo." : "Seu pedido está aguardando o pagamento por PIX.";
+  if (data.payment_status === "approved") return data.status === "enviado" ? "Seu pedido está a caminho. Obrigado por comprar na KRYPTO!" : "Pagamento confirmado. Obrigado por comprar na KRYPTO!";
+  if (data.pix_key) return isNew ? "Pedido criado! Agora é só pagar com o PIX Copia e Cola abaixo: o valor já vai preenchido." : "Seu pedido está aguardando o pagamento por PIX.";
   return "O status é atualizado após a confirmação enviada pelo Mercado Pago. Não feche a página de pagamento antes de concluir.";
+}
+
+let qrDrawn = "";
+function renderQr(payload) {
+  const box = $("#pix-qr-box");
+  if (!payload || typeof qrcode !== "function") { box.hidden = true; return; }
+  if (qrDrawn === payload) { box.hidden = false; return; }
+  try {
+    const qr = qrcode(0, "M"); qr.addData(payload); qr.make();
+    $("#pix-qr").innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    qrDrawn = payload; box.hidden = false;
+  } catch (_) { box.hidden = true; }
 }
 
 function render(data) {
   latest = data;
+  if (window.Krypto && window.Krypto.Orders) window.Krypto.Orders.add(data.public_id); // abrir o link já guarda em "Meus pedidos"
   $("#order-code").textContent = data.public_id;
   $("#order-code-eyebrow").textContent = `#${data.public_id}`;
   $("#order-created").textContent = data.created_at ? new Date(data.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
@@ -48,7 +61,11 @@ function render(data) {
   $("#pix-card").hidden = !showPix;
   if (showPix) {
     $("#pix-key").textContent = data.pix_key;
+    $("#pix-payload").textContent = data.pix_payload || "";
+    $("#copy-payload").hidden = !data.pix_payload;
+    renderQr(data.pix_payload);
     $("#pix-amount").textContent = money(data.total_cents);
+    $("#pix-amount-alt").textContent = money(data.total_cents);
     $("#pix-order-code").textContent = data.public_id;
     $("#pix-note").textContent = `Seu pedido fica reservado por ${data.pix_reserve_hours || 24} horas. Assim que identificarmos o pagamento, esta página muda para “Pagamento confirmado”. Pode fechar e voltar depois com o link deste pedido.`;
   }
@@ -79,14 +96,15 @@ async function copyText(text, okMessage) {
     feedback.textContent = okMessage;
   } catch (_) {
     // Navegadores sem permissão de área de transferência: seleciona o texto para copiar à mão.
-    const range = document.createRange(); range.selectNodeContents($("#pix-key"));
+    const range = document.createRange(); range.selectNodeContents($(text === (latest && latest.pix_payload) ? "#pix-payload" : "#pix-key"));
     const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
-    feedback.textContent = "Selecionamos a chave. Toque e segure para copiar.";
+    feedback.textContent = "Selecionamos o código. Toque e segure para copiar.";
   }
   clearTimeout(copyText.timer);
   copyText.timer = setTimeout(() => { feedback.textContent = ""; }, 4000);
 }
-$("#copy-key").addEventListener("click", () => latest?.pix_key && copyText(latest.pix_key, "Chave PIX copiada! Agora cole no app do seu banco."));
+$("#copy-payload").addEventListener("click", () => latest?.pix_payload && copyText(latest.pix_payload, "Código copiado! No app do banco, escolha Pix Copia e Cola e cole: o valor já vem preenchido."));
+$("#copy-key").addEventListener("click", () => latest?.pix_key && copyText(latest.pix_key, "Chave copiada. Lembre de digitar o valor exato."));
 $("#copy-amount").addEventListener("click", () => latest && copyText((latest.total_cents / 100).toFixed(2).replace(".", ","), "Valor copiado."));
 
 refresh().catch((e) => { $("#order-message").textContent = e.message; $("#order-message").dataset.error = "true"; });

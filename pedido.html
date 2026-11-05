@@ -37,22 +37,34 @@
       <div class="pix-body">
         <div class="pix-pay">
           <div class="pix-amount-box">
-            <small>Valor exato a pagar</small>
+            <small>Valor exato a pagar (já vai preenchido no PIX Copia e Cola)</small>
             <strong id="pix-amount">—</strong>
-            <button class="button button-outline pix-copy" id="copy-amount" type="button">Copiar valor</button>
           </div>
           <div class="pix-key-box">
-            <small>Chave PIX (chave aleatória)</small>
-            <code id="pix-key">—</code>
-            <button class="button button-primary pix-copy" id="copy-key" type="button">Copiar chave PIX</button>
+            <small>PIX Copia e Cola</small>
+            <code id="pix-payload">—</code>
+            <button class="button button-primary pix-copy" id="copy-payload" type="button">Copiar PIX Copia e Cola</button>
+          </div>
+          <div class="pix-qr-box" id="pix-qr-box" hidden>
+            <div class="pix-qr" id="pix-qr" role="img" aria-label="QR Code do PIX"></div>
+            <small>Ou escaneie com o app do banco</small>
           </div>
           <p class="pix-copy-feedback" id="copy-feedback" role="status" aria-live="polite"></p>
+          <details class="pix-alt">
+            <summary>Prefiro pagar só com a chave</summary>
+            <small>Chave PIX (chave aleatória) — aqui você digita o valor <strong id="pix-amount-alt"></strong> à mão</small>
+            <code id="pix-key">—</code>
+            <div class="pix-alt-actions">
+              <button class="button button-outline pix-copy" id="copy-key" type="button">Copiar chave</button>
+              <button class="button button-outline pix-copy" id="copy-amount" type="button">Copiar valor</button>
+            </div>
+          </details>
         </div>
         <ol class="pix-steps">
-          <li>Copie a chave PIX ao lado.</li>
-          <li>No app do seu banco, abra o <strong>PIX</strong> e escolha pagar usando uma <strong>chave</strong>.</li>
-          <li>Cole a chave e digite o <strong>valor exato</strong>. Confira os dados do recebedor antes de confirmar.</li>
-          <li>Se houver campo de mensagem, escreva o código do pedido: <strong id="pix-order-code">—</strong>.</li>
+          <li>Toque em <strong>Copiar PIX Copia e Cola</strong>.</li>
+          <li>No app do seu banco, abra o <strong>PIX</strong> e escolha <strong>Pix Copia e Cola</strong> (ou “Pagar com código”).</li>
+          <li>Cole o código: o <strong>valor já aparece preenchido</strong>. Confira o valor e o recebedor antes de confirmar.</li>
+          <li>Se o banco pedir mensagem, escreva o código do pedido: <strong id="pix-order-code">—</strong>.</li>
         </ol>
       </div>
       <p class="pix-note" id="pix-note">Assim que identificarmos o seu pagamento, esta página muda para “Pagamento confirmado”. Pode fechar e voltar depois com o link deste pedido.</p>
@@ -73,7 +85,8 @@
         <div class="order-total-row"><dt>Total</dt><dd id="order-total">—</dd></div>
         <div><dt>Rastreamento</dt><dd id="tracking">Será informado quando o pedido for enviado.</dd></div>
       </dl>
-      <a class="button button-primary" href="index.html">Voltar à loja</a>
+      <a class="button button-primary" href="conta.html">Ver todos os meus pedidos</a>
+      <a class="button button-outline" href="index.html">Voltar à loja</a>
     </section>
   </main>
 
@@ -82,6 +95,8 @@
     <p>VISTA SUA ATITUDE. DESDE 2024.</p>
     <small>© 2026 KRYPTO.</small>
   </footer>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" defer></script>
+  <script src="shop.js"></script>
   <script src="pedido.js" defer></script>
 </body>
 </html>

@@ -1,6 +1,16 @@
 # KRYPTO — loja virtual (Vercel + Supabase + PIX + Mercado Pago)
 
-## Pagamento por PIX (novo)
+## Compra sem cadastro, "Meus pedidos" e PIX com valor preenchido (novo)
+
+- **Sem conta de cliente:** o cliente não cria mais login no Supabase Auth, então não consome o limite de usuários. O checkout pede nome, e-mail, telefone e endereço; esses dados vão só no pedido (uma linha na tabela `orders`, apenas de quem realmente compra). O Supabase Auth continua sendo usado **somente pelo admin**.
+- **Painel "Meus pedidos"** (`conta.html`): lista os pedidos feitos naquele aparelho, separados em *Em andamento* e *Finalizados*, com barra de etapas (Pedido → Pago → Preparando → A caminho → Entregue) e rastreio. Atualiza sozinho a cada 30 s. Os códigos dos pedidos ficam no `localStorage` do navegador; em outro aparelho o cliente recupera com **e-mail + código do pedido** (`POST /api/orders/lookup`).
+- **PIX Copia e Cola com valor:** o pedido gera um código PIX (BR Code) com o total já embutido (`api/_lib/pix.js`), mais QR Code. Ao colar no app do banco, o valor aparece preenchido (ex.: 3 peças = R$ 300,00). A chave simples continua disponível como alternativa. Não usa serviço externo nem banco de dados.
+- Variáveis opcionais na Vercel: `PIX_MERCHANT_NAME` (nome do recebedor, até 25 caracteres, padrão `KRYPTO`) e `PIX_MERCHANT_CITY` (cidade, até 15 caracteres, padrão `BRASIL`). Use o nome/cidade da conta que recebe o PIX.
+- Proteções sem login: campo isca anti-robô e limite de 3 pedidos PIX/aguardando pagamento por e-mail.
+- Não precisa de nova migração SQL. A confirmação do PIX continua manual no painel admin.
+- Atualize `privacidade.html`: a loja guarda os dados do pedido e o navegador do cliente guarda os códigos dos pedidos e o último endereço.
+
+## Pagamento por PIX
 
 O checkout oferece **PIX** (padrão) e, se `MERCADOPAGO_ACCESS_TOKEN` estiver configurado, também **cartão/outros via Mercado Pago**.
 

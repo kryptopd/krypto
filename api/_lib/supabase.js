@@ -110,6 +110,8 @@ function getSiteUrl(req) {
 const DEFAULT_PIX_KEY = "4f5415bf-b519-4df0-a504-c9bc73de4699";
 function pixConfig() {
   return {
+    merchant_name: String(process.env.PIX_MERCHANT_NAME || "KRYPTO").trim(),
+    merchant_city: String(process.env.PIX_MERCHANT_CITY || "BRASIL").trim(),
     pix_key: String(process.env.PIX_KEY || DEFAULT_PIX_KEY).trim(),
     // Quanto tempo o estoque fica reservado para um pedido PIX aguardando pagamento (definido no SQL).
     pix_reserve_hours: 24

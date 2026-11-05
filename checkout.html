@@ -56,6 +56,7 @@
           <p class="address-banner" id="address-banner"></p>
           <div class="form-grid">
             <label class="field field-full">Nome de quem recebe<input type="text" name="nome" placeholder="Nome completo" autocomplete="name" required></label>
+            <label class="field field-full">E-mail <span class="optional">(para você recuperar o pedido depois)</span><input type="email" name="email" placeholder="voce@email.com" inputmode="email" autocomplete="email" required></label>
             <label class="field field-full">Telefone / WhatsApp<input type="tel" name="telefone" placeholder="(00) 00000-0000" inputmode="tel" autocomplete="tel" maxlength="16" required></label>
             <label class="field field-full">CEP <span class="optional" id="cep-hint">(preenchemos o endereço para você)</span><input type="text" name="cep" placeholder="00000-000" inputmode="numeric" autocomplete="postal-code" maxlength="9" required></label>
             <label class="field field-full">Endereço <span class="optional">(rua e bairro)</span><input type="text" name="endereco" placeholder="Rua, avenida, bairro..." autocomplete="address-line1" required></label>
@@ -84,6 +85,7 @@
           </label>
         </fieldset>
         <label class="field field-full privacy-consent"><input type="checkbox" name="privacy_consent" id="privacy-consent" required> <span>Li a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a> e os <a href="termos.html" target="_blank" rel="noopener">Termos de compra</a>, e entendo o uso dos meus dados para processar e entregar o pedido.</span></label>
+        <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
         <p class="form-note" id="checkout-feedback" role="status" aria-live="polite"></p>
         <button class="button button-primary submit-order" type="submit">Confirmar pedido <span aria-hidden="true">↗</span></button>
       </form>
@@ -104,7 +106,6 @@
     <p>VISTA SUA ATITUDE. DESDE 2024.</p>
     <small>© 2026 KRYPTO.</small>
   </footer>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.js"></script>
   <script src="shop.js"></script>
   <script src="checkout.js" defer></script>
 </body>
