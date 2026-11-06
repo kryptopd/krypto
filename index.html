@@ -6,26 +6,45 @@
   <meta name="theme-color" content="#0b0a0e">
   <meta name="description" content="KRYPTO: moda urbana para quem faz as próprias regras.">
   <title>KRYPTO — Vista sua atitude</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:title" content="KRYPTO — Vista sua atitude">
+  <meta property="og:description" content="Moda urbana para quem faz as próprias regras. Peças limitadas, pague com PIX.">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="site-header">
+  <div class="announce" id="announce" role="note"><span id="announce-text">Pague com PIX · Frete calculado pelo seu estado</span></div>
+  <header class="site-header store-header">
     <a class="brand" href="index.html" aria-label="KRYPTO, página inicial">
       <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
       <span>KRYPTO<span class="brand-dot">.</span></span>
     </a>
     <nav class="main-nav" aria-label="Navegação principal">
-      <a href="#colecao">Coleção</a>
-      <a href="#sobre">Manifesto</a>
-      <a href="#contato">Contato</a>
+      <a href="#colecao" data-nav-category="">Loja</a>
+      <a href="#colecao" data-nav-category="Camisetas">Camisetas</a>
+      <a href="#colecao" data-nav-category="Moletons">Moletons</a>
+      <a href="#colecao" data-nav-category="Acessórios">Acessórios</a>
     </nav>
-    <a class="header-cart" href="checkout.html" aria-label="Ir para a finalização do pedido">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 1.9-1.4L21 9H7M10 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" /></svg>
-      <span>Finalizar compra</span>
-    </a>
+    <form class="header-search" id="search-form" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" /></svg>
+      <input id="search-input" type="search" placeholder="Buscar peças" aria-label="Buscar produtos" autocomplete="off">
+    </form>
+    <div class="header-actions">
+      <a class="header-account" href="conta.html" aria-label="Meus pedidos">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm-8 9c.6-3.9 3.7-6 8-6s7.4 2.1 8 6" /></svg>
+        <span data-account-label>Meus pedidos</span>
+      </a>
+      <button class="header-cart" id="cart-open" type="button" aria-label="Abrir sacola" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8Zm3.5 0V6.5a3.5 3.5 0 0 1 7 0V8" /></svg>
+        <span class="cart-label">Sacola</span>
+        <b class="cart-badge" data-cart-count hidden>0</b>
+      </button>
+    </div>
   </header>
 
   <main>
@@ -34,7 +53,7 @@
         <span class="eyebrow"><span class="eyebrow-line"></span> NOVA COLEÇÃO · 2026</span>
         <h1>Vista sua<br><span>atitude.</span></h1>
         <p>Feita para quem não pede licença.<br>Moda urbana, identidade sem limites.</p>
-        <a class="button button-primary" href="#colecao">Descobrir coleção <span aria-hidden="true">↗</span></a>
+        <a class="button button-primary" href="#colecao">Comprar agora <span aria-hidden="true">↗</span></a>
         <div class="hero-note"><span class="note-star">✳</span> Peças limitadas. Atitude ilimitada.</div>
       </div>
       <div class="hero-visual" role="img" aria-label="Modelo vestindo roupa urbana preta">
@@ -51,23 +70,40 @@
       </div>
     </section>
 
+    <section class="benefits" aria-label="Vantagens da loja">
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v9H3V7Zm11 3h4l3 3v3h-7M7 19.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm10 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg><span><strong>Entrega para todo o Brasil</strong><small id="benefit-shipping">Frete calculado pelo seu estado</small></span></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 2.8 7.7 7 9.5 4.2-1.8 7-5.1 7-9.5V6l-7-3Zm-3 8.5 2.2 2.2L15.5 9"/></svg><span><strong>Compra segura</strong><small>PIX ou cartão pelo Mercado Pago</small></span></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3L20 9m0-5v5h-5M20 12a8 8 0 0 1-14 5.3L4 15m0 5v-5h5"/></svg><span><strong>Trocas e devoluções</strong><small><a href="trocas-devolucoes.html">Veja a política</a></small></span></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2V4Zm3 5h8m-8 4h5"/></svg><span><strong>Acompanhe seu pedido</strong><small>Status e rastreio online</small></span></div>
+    </section>
+
     <section class="collection section-wrap" id="colecao">
       <div class="section-heading">
         <div>
-          <span class="eyebrow"><span class="eyebrow-line"></span> ESCOLHA O SEU PRÓXIMO</span>
+          <span class="eyebrow"><span class="eyebrow-line"></span> ESCOLHA SUAS PEÇAS</span>
           <h2>DROP <span>01</span></h2>
         </div>
-        <p>Peças essenciais. Presença inevitável.<br>Produzidas em quantidades limitadas.</p>
+        <p>Monte sua sacola com quantas peças quiser.<br>Produzidas em quantidades limitadas.</p>
       </div>
       <div class="category-row" aria-label="Categorias da coleção">
         <a class="category active" data-category="" href="#colecao">Tudo <span id="product-count">0</span></a>
         <a class="category" data-category="Camisetas" href="#colecao">Camisetas</a>
         <a class="category" data-category="Moletons" href="#colecao">Moletons</a>
         <a class="category" data-category="Acessórios" href="#colecao">Acessórios</a>
-        <span class="sort-label">DROP 01 — 2026</span>
+        <label class="sort-box">Ordenar
+          <select id="sort-select" aria-label="Ordenar produtos">
+            <option value="new">Lançamentos</option>
+            <option value="price-asc">Menor preço</option>
+            <option value="price-desc">Maior preço</option>
+            <option value="name">Nome (A–Z)</option>
+          </select>
+        </label>
       </div>
+      <p class="results-note" id="results-note" role="status" aria-live="polite"></p>
 
-      <div class="product-grid" id="product-grid" aria-live="polite"></div>
+      <div class="product-grid" id="product-grid" aria-live="polite" aria-busy="true">
+        <div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div>
+      </div>
     </section>
 
     <section class="manifesto" id="sobre">
@@ -83,7 +119,7 @@
 
     <section class="newsletter shop-cta" id="contato">
       <div><span class="eyebrow"><span class="eyebrow-line"></span> DROP 01 · PEÇAS LIMITADAS</span><h2>Seu próximo <span>drop.</span></h2></div>
-      <a class="button button-primary" href="#colecao">Explorar coleção <span aria-hidden="true">↗</span></a>
+      <a class="button button-primary" href="#colecao">Voltar às peças <span aria-hidden="true">↗</span></a>
     </section>
   </main>
 
@@ -93,9 +129,21 @@
       <span>KRYPTO<span class="brand-dot">.</span></span>
     </a>
     <p>VISTA SUA ATITUDE. DESDE 2024.</p>
-    <a class="admin-link" href="admin.html">Área administrativa ↗</a>
-    <small>© 2026 KRYPTO. Feito para quem faz as próprias regras.</small>
+    <small><span id="copyright-mark">©</span> 2026 KRYPTO. Feito para quem faz as próprias regras.</small>
   <nav class="legal-links" aria-label="Informações legais"><a href="privacidade.html">Privacidade</a><a href="termos.html">Termos de compra</a><a href="trocas-devolucoes.html">Trocas e devoluções</a></nav></footer>
+  <div class="drawer-overlay" id="drawer-overlay" hidden></div>
+  <aside class="cart-drawer" id="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title" hidden>
+    <div class="drawer-head"><h2 id="cart-title">Sua sacola <span id="drawer-count"></span></h2><button type="button" class="drawer-close" id="cart-close" aria-label="Fechar sacola">×</button></div>
+    <div class="drawer-body" id="drawer-body"></div>
+    <div class="drawer-foot" id="drawer-foot" hidden>
+      <div class="drawer-subtotal"><span>Subtotal</span><strong id="drawer-subtotal">R$ 0,00</strong></div>
+      <p class="drawer-note">O frete é calculado no próximo passo, de acordo com o seu estado e o peso das peças.</p>
+      <button class="button button-primary drawer-buy" id="drawer-buy" type="button">Fazer compra <span aria-hidden="true">↗</span></button>
+      <button class="drawer-continue" id="drawer-continue" type="button">Continuar comprando</button>
+    </div>
+  </aside>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="shop.js"></script>
   <script src="store.js" defer></script>
 </body>
 </html>

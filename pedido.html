@@ -1,3 +1,111 @@
 <!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Seu pedido — KRYPTO</title><link rel="stylesheet" href="styles.css"></head>
-<body class="checkout-page"><main class="checkout section-wrap"><div class="checkout-heading"><span class="eyebrow">KRYPTO</span><h1>Seu <span>pedido.</span></h1><p id="order-message" role="status">Consultando o status do pedido…</p></div><section class="order-summary"><p><strong>Código:</strong> <span id="order-code">—</span></p><p><strong>Status:</strong> <span id="order-status">Consultando…</span></p><p><strong>Pagamento:</strong> <span id="payment-status">Consultando…</span></p><p><strong>Subtotal:</strong> <span id="order-subtotal">—</span></p><p><strong>Frete:</strong> <span id="order-shipping">—</span></p><p><strong>Total:</strong> <span id="order-total">—</span></p><p><strong>Rastreamento:</strong> <span id="tracking">Será informado quando o pedido for enviado.</span></p><a class="button button-primary" href="index.html">Voltar à loja</a></section></main><script src="pedido.js" defer></script></body></html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0a0e">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Seu pedido — KRYPTO</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="checkout-page order-page">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Voltar para a loja KRYPTO">
+      <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
+      <span>KRYPTO<span class="brand-dot">.</span></span>
+    </a>
+    <span class="checkout-step"><span>02</span> ACOMPANHE SEU PEDIDO</span>
+    <a class="admin-store-link" href="index.html">← Voltar para a loja</a>
+  </header>
+
+  <main class="checkout section-wrap order-main">
+    <div class="checkout-heading">
+      <span class="eyebrow"><span class="eyebrow-line"></span> PEDIDO <span id="order-code-eyebrow">—</span></span>
+      <h1 id="order-title">Seu <span>pedido.</span></h1>
+      <p id="order-message" role="status" aria-live="polite">Consultando o status do pedido…</p>
+    </div>
+
+    <section class="pix-card" id="pix-card" hidden aria-labelledby="pix-title">
+      <div class="pix-head">
+        <span class="panel-kicker">PAGUE COM PIX</span>
+        <h2 id="pix-title">Falta só o pagamento</h2>
+      </div>
+      <div class="pix-body">
+        <div class="pix-pay">
+          <div class="pix-amount-box">
+            <small>Valor exato a pagar (já vai preenchido no PIX Copia e Cola)</small>
+            <strong id="pix-amount">—</strong>
+          </div>
+          <div class="pix-key-box">
+            <small>PIX Copia e Cola</small>
+            <code id="pix-payload">—</code>
+            <button class="button button-primary pix-copy" id="copy-payload" type="button">Copiar PIX Copia e Cola</button>
+          </div>
+          <div class="pix-qr-box" id="pix-qr-box" hidden>
+            <div class="pix-qr" id="pix-qr" role="img" aria-label="QR Code do PIX"></div>
+            <small>Ou escaneie com o app do banco</small>
+          </div>
+          <p class="pix-copy-feedback" id="copy-feedback" role="status" aria-live="polite"></p>
+          <details class="pix-alt">
+            <summary>Prefiro pagar só com a chave</summary>
+            <small>Chave PIX (chave aleatória) — aqui você digita o valor <strong id="pix-amount-alt"></strong> à mão</small>
+            <code id="pix-key">—</code>
+            <div class="pix-alt-actions">
+              <button class="button button-outline pix-copy" id="copy-key" type="button">Copiar chave</button>
+              <button class="button button-outline pix-copy" id="copy-amount" type="button">Copiar valor</button>
+            </div>
+          </details>
+        </div>
+        <ol class="pix-steps">
+          <li>Toque em <strong>Copiar PIX Copia e Cola</strong>.</li>
+          <li>No app do seu banco, abra o <strong>PIX</strong> e escolha <strong>Pix Copia e Cola</strong> (ou “Pagar com código”).</li>
+          <li>Cole o código: o <strong>valor já aparece preenchido</strong>. Confira o valor e o recebedor antes de confirmar.</li>
+          <li>Se o banco pedir mensagem, escreva o código do pedido: <strong id="pix-order-code">—</strong>.</li>
+        </ol>
+      </div>
+      <p class="pix-note" id="pix-note">Assim que identificarmos o seu pagamento, esta página muda para “Pagamento confirmado”. Pode fechar e voltar depois com o link deste pedido.</p>
+    </section>
+
+    <section class="order-progress" id="order-progress" aria-label="Andamento do pedido" hidden>
+      <ol id="progress-list"></ol>
+    </section>
+
+    <section class="order-summary order-details" aria-label="Detalhes do pedido">
+      <h2>Detalhes <span id="order-created"></span></h2>
+      <dl>
+        <div><dt>Código</dt><dd id="order-code">—</dd></div>
+        <div><dt>Status</dt><dd id="order-status">Consultando…</dd></div>
+        <div><dt>Pagamento</dt><dd id="payment-status">Consultando…</dd></div>
+        <div><dt>Subtotal</dt><dd id="order-subtotal">—</dd></div>
+        <div><dt>Frete</dt><dd id="order-shipping">—</dd></div>
+        <div class="order-total-row"><dt>Total</dt><dd id="order-total">—</dd></div>
+        <div><dt>Rastreamento</dt><dd id="tracking">Será informado quando o pedido for enviado.</dd></div>
+      </dl>
+      <div class="order-share" id="order-share" hidden>
+        <strong>Quer acompanhar em outro aparelho?</strong>
+        <p>Envie o link deste pedido para você mesmo. Quem tiver o link consegue ver o andamento do pedido.</p>
+        <div class="order-share-actions">
+          <a class="button button-outline" id="share-whatsapp" href="#" target="_blank" rel="noopener">Enviar link no WhatsApp</a>
+          <button class="button button-outline" id="share-copy" type="button">Copiar link do pedido</button>
+        </div>
+        <p class="pix-copy-feedback" id="share-feedback" role="status" aria-live="polite"></p>
+      </div>
+      <a class="button button-primary" href="conta.html">Ver todos os meus pedidos</a>
+      <a class="button button-outline" href="index.html">Voltar à loja</a>
+    </section>
+  </main>
+
+  <footer class="site-footer checkout-footer">
+    <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
+    <p>VISTA SUA ATITUDE. DESDE 2024.</p>
+    <small>© 2026 KRYPTO.</small>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" defer></script>
+  <script src="shop.js"></script>
+  <script src="pedido.js" defer></script>
+</body>
+</html>

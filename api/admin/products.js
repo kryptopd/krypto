@@ -12,6 +12,10 @@ function normalize(body) {
   if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 0) {
     throw Object.assign(new Error("Preço ou estoque inválido."), { statusCode: 400 });
   }
+  const weight = body.weight_grams === undefined || body.weight_grams === "" ? 300 : Number(body.weight_grams);
+  if (!Number.isInteger(weight) || weight < 0 || weight > 100000) {
+    throw Object.assign(new Error("Informe o peso em gramas (número inteiro entre 0 e 100000)."), { statusCode: 400 });
+  }
   if (!/^https?:\/\//i.test(imageUrl)) {
     throw Object.assign(new Error("Informe uma URL de imagem válida."), { statusCode: 400 });
   }
@@ -20,6 +24,7 @@ function normalize(body) {
     category,
     price_cents: Math.round(price * 100),
     stock,
+    weight_grams: weight,
     sizes: Array.isArray(body.sizes) ? body.sizes.map(String).map(s => s.trim()).filter(Boolean).slice(0, 20) : [],
     tag: String(body.tag || "").trim().slice(0, 40),
     image_url: imageUrl,

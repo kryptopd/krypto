@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0a0e">
+  <meta name="robots" content="noindex">
+  <title>Meus pedidos — KRYPTO</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="checkout-page account-page">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Voltar para a loja KRYPTO">
+      <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
+      <span>KRYPTO<span class="brand-dot">.</span></span>
+    </a>
+    <span class="checkout-step"><span>00</span> MEUS PEDIDOS</span>
+    <a class="admin-store-link" href="index.html">← Voltar para a loja</a>
+  </header>
+
+  <main class="account-main orders-main">
+    <section class="account-card orders-card" aria-labelledby="orders-title">
+      <span class="eyebrow"><span class="eyebrow-line"></span> MEUS PEDIDOS</span>
+      <h1 id="orders-title">Acompanhe suas <span>compras.</span></h1>
+      <p class="account-lead">Sem cadastro e sem senha: os pedidos feitos neste aparelho aparecem aqui e o status é atualizado sozinho.</p>
+      <div class="orders-toolbar"><button class="button button-outline" id="orders-refresh" type="button">Atualizar agora</button></div>
+      <div class="orders-list" id="orders-list" aria-live="polite"></div>
+      <div class="orders-empty" id="orders-empty" hidden>
+        <strong>Nenhum pedido neste aparelho</strong>
+        <p>Fez uma compra em outro celular ou computador? Recupere abaixo com o e-mail e o telefone usados na compra.</p>
+      </div>
+      <details class="orders-recover" id="orders-recover">
+        <summary>Comprou em outro aparelho? Recupere seus pedidos</summary>
+        <form class="auth-form" id="recover-form" novalidate>
+          <label class="field">E-mail usado na compra<input name="email" type="email" inputmode="email" autocomplete="email" placeholder="voce@email.com" required></label>
+          <label class="field">Telefone usado na compra<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(32) 99999-9999" required></label>
+          <p class="form-note" id="recover-feedback" role="status" aria-live="polite"></p>
+          <button class="button button-primary" type="submit">Buscar meus pedidos <span aria-hidden="true">↗</span></button>
+        </form>
+      </details>
+      <div class="account-actions"><a class="button button-primary" href="index.html#colecao">Continuar comprando <span aria-hidden="true">↗</span></a></div>
+    </section>
+  </main>
+
+  <footer class="site-footer checkout-footer">
+    <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
+    <p>VISTA SUA ATITUDE. DESDE 2024.</p>
+    <small>© 2026 KRYPTO.</small>
+  </footer>
+  <script src="shop.js"></script>
+  <script src="conta.js" defer></script>
+</body>
+</html>

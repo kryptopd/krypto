@@ -1,4 +1,5 @@
 const { getSupabase, sendError, requireMethod, requireAdmin } = require("../_lib/supabase");
+const { readSettings } = require("../_lib/shipping");
 
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["GET"])) return;
@@ -23,11 +24,14 @@ module.exports = async function handler(req, res) {
     const stats = {
       product_count: products.filter((p) => p.active).length,
       order_count: allOrders.length,
-      pending_count: allOrders.filter((o) => o.status === "aguardando").length,
+      pending_count: allOrders.filter((o) => ["aguardando", "aguardando_pagamento"].includes(o.status)).length,
       sales_cents: allOrders.filter((o) => o.payment_status === "approved" && o.status !== "cancelado")
         .reduce((sum, o) => sum + Number(o.total_cents || 0), 0)
     };
-    return res.status(200).json({ stats, products, orders });
+    // Se a migração ainda não foi executada, o painel continua abrindo e avisa na área de frete.
+    let shipping = null, shippingError = null;
+    try { shipping = await readSettings(supabase); } catch (e) { shippingError = e.message; }
+    return res.status(200).json({ stats, products, orders, shipping, shipping_error: shippingError });
   } catch (error) {
     return sendError(res, error);
   }

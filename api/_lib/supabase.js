@@ -54,6 +54,10 @@ async function requireAdmin(req, res) {
       res.status(401).json({ detail: "Sua sessão expirou ou é inválida. Entre novamente." });
       return false;
     }
+    if (!data.user.email_confirmed_at) {
+      res.status(403).json({ detail: "Confirme o e-mail da conta de administrador no Supabase antes de acessar o painel." });
+      return false;
+    }
     if (!allowedEmails.includes(data.user.email.toLowerCase())) {
       res.status(403).json({ detail: "Este usuário está autenticado, mas não tem permissão de administrador." });
       return false;
@@ -62,6 +66,30 @@ async function requireAdmin(req, res) {
   } catch (error) {
     console.error("[KRYPTO AUTH] Falha ao validar sessão", error);
     res.status(503).json({ detail: "Não foi possível validar o login no Supabase. Confira as configurações do servidor." });
+    return false;
+  }
+}
+
+// Cliente logado (Supabase Auth). Devolve o usuário ou false (já respondeu ao navegador).
+async function requireUser(req, res) {
+  const match = (req.headers.authorization || "").match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    res.status(401).json({ detail: "Entre na sua conta para finalizar a compra.", code: "LOGIN_REQUIRED" });
+    return false;
+  }
+  try {
+    const { data, error } = await getSupabase().auth.getUser(match[1]);
+    if (error || !data?.user?.email) {
+      res.status(401).json({ detail: "Sua sessão expirou. Entre novamente para finalizar a compra.", code: "LOGIN_REQUIRED" });
+      return false;
+    }
+    if (!data.user.email_confirmed_at) {
+      res.status(403).json({ detail: "Confirme seu e-mail (enviamos um link) antes de finalizar a compra." });
+      return false;
+    }
+    return data.user;
+  } catch (error) {
+    sendError(res, error);
     return false;
   }
 }
@@ -78,13 +106,18 @@ function getSiteUrl(req) {
   }
   return `${proto}://${host}`.replace(/^http:\/\/[^/]+\.vercel\.app/i, `https://${host}`);
 }
-function shippingConfig() {
-  const raw = process.env.KRYPTO_SHIPPING_CENTS;
-  if (raw === undefined || !/^\\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
-    const error = new Error("Configure KRYPTO_SHIPPING_CENTS na Vercel (frete fixo em centavos, ex.: 1990 para R$ 19,90).");
-    error.statusCode = 503;
-    throw error;
-  }
-  return { shipping_cents: Number(raw), shipping_name: process.env.KRYPTO_SHIPPING_NAME || "Frete padrão" };
+// Chave PIX (chave aleatória) que recebe os pagamentos. Pode ser trocada pela variável PIX_KEY na Vercel.
+const DEFAULT_PIX_KEY = "4f5415bf-b519-4df0-a504-c9bc73de4699";
+function pixConfig() {
+  return {
+    merchant_name: String(process.env.PIX_MERCHANT_NAME || "KRYPTO").trim(),
+    merchant_city: String(process.env.PIX_MERCHANT_CITY || "BRASIL").trim(),
+    pix_key: String(process.env.PIX_KEY || DEFAULT_PIX_KEY).trim(),
+    // Quanto tempo o estoque fica reservado para um pedido PIX aguardando pagamento (definido no SQL).
+    pix_reserve_hours: 24
+  };
 }
-module.exports = { getSupabase, sendError, requireMethod, requireAdmin, getSiteUrl, shippingConfig };
+function paymentMethods() {
+  return { pix: true, mercadopago: Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN) };
+}
+module.exports = { getSupabase, sendError, requireMethod, requireAdmin, requireUser, getSiteUrl, pixConfig, paymentMethods };

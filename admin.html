@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0b0a0e">
   <title>Administração — KRYPTO</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -34,13 +36,63 @@
   <main class="admin-main" id="admin-main" hidden>
     <div class="admin-title-row">
       <div><span class="eyebrow"><span class="eyebrow-line"></span> VISÃO GERAL</span><h1>Painel <span>KRYPTO.</span></h1><p>Gerencie seus produtos e acompanhe os pedidos.</p></div>
-      <button class="button button-outline" id="admin-logout" type="button">Sair do painel</button>
+      <div class="admin-title-actions">
+        <a class="button button-outline" href="index.html">Ver loja</a>
+        <a class="button button-outline" href="#frete">Frete</a>
+        <button class="button button-outline" id="admin-refresh" type="button">Atualizar</button>
+        <button class="button button-outline" id="admin-logout" type="button">Sair do painel</button>
+      </div>
     </div>
 
     <section class="admin-stats" aria-label="Resumo da loja">
       <article class="stat-card"><span>PRODUTOS NO CATÁLOGO</span><strong id="stat-products">0</strong><small>Peças cadastradas</small></article>
       <article class="stat-card"><span>PEDIDOS RECEBIDOS</span><strong id="stat-orders">0</strong><small><i class="status-dot"></i> <span id="stat-pending">0 aguardando</span></small></article>
       <article class="stat-card"><span>VENDAS DO DROP</span><strong id="stat-sales">R$ 0,00</strong><small>Pedidos não cancelados</small></article>
+    </section>
+
+    <section class="admin-panel shipping-panel" id="frete">
+      <div class="panel-heading"><div><span class="panel-kicker">FRETE E ENTREGA</span><h2>Cálculo do frete</h2><p class="panel-description">Defina o valor por estado, o peso e quando o frete é grátis. O cálculo é feito no servidor, o cliente não consegue alterá-lo.</p></div><span class="panel-count" id="shipping-status">CARREGANDO</span></div>
+      <p class="shipping-banner" id="shipping-banner" hidden></p>
+      <form id="shipping-form" novalidate>
+        <div class="shipping-general">
+          <label class="check-card"><input type="checkbox" name="free_shipping"> <span><strong>Frete grátis para todos os pedidos</strong><small>Liga ou desliga o frete grátis na loja inteira.</small></span></label>
+          <label class="field">Frete grátis a partir de (R$)<input type="text" name="free_over" inputmode="decimal" placeholder="0,00"><small class="field-help">Use 0 para desligar. Vale para qualquer estado ativo.</small></label>
+          <label class="field">Nome do frete<input type="text" name="name" maxlength="60" placeholder="Frete padrão"></label>
+          <label class="field">Peso coberto pelo valor base (g)<input type="number" name="base_weight" min="0" max="100000" step="1" placeholder="1000"><small class="field-help">Acima disso, cobra o “por kg extra”, por kg começado.</small></label>
+          <label class="field">Peso da embalagem (g)<input type="number" name="packaging" min="0" max="100000" step="1" placeholder="100"><small class="field-help">Somado ao peso das peças de cada pedido.</small></label>
+        </div>
+
+        <div class="shipping-bulk">
+          <strong>Aplicar a todos os estados</strong>
+          <label class="field">Valor base (R$)<input type="text" id="bulk-base" inputmode="decimal" placeholder="0,00"></label>
+          <label class="field">R$ por kg extra<input type="text" id="bulk-perkg" inputmode="decimal" placeholder="0,00"></label>
+          <label class="field">Prazo (dias)<input type="number" id="bulk-days" min="0" max="90" placeholder="5"></label>
+          <button class="button button-outline" type="button" id="bulk-apply">Aplicar</button>
+        </div>
+
+        <details class="shipping-states" id="shipping-states">
+          <summary>
+            <span class="states-title">Valores por estado <small id="states-meta"></small></span>
+            <span class="states-toggle"><span class="when-closed">Mostrar tabela</span><span class="when-open">Ocultar tabela</span></span>
+          </summary>
+          <div class="table-wrap">
+            <table class="shipping-table">
+              <thead><tr><th>UF</th><th>ESTADO</th><th>ENTREGA</th><th>FRETE GRÁTIS</th><th>VALOR BASE (R$)</th><th>R$ POR KG EXTRA</th><th>PRAZO (DIAS)</th></tr></thead>
+              <tbody id="shipping-rows"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="shipping-sim">
+          <strong>Simulador</strong>
+          <label class="field">Estado<select id="sim-state"></select></label>
+          <label class="field">Peso das peças (g)<input type="number" id="sim-weight" min="0" step="1" value="600"></label>
+          <label class="field">Subtotal (R$)<input type="text" id="sim-subtotal" inputmode="decimal" value="150,00"></label>
+          <p class="sim-result" id="sim-result" role="status"></p>
+        </div>
+
+        <div class="editor-footer"><p class="form-note" id="shipping-feedback" role="status" aria-live="polite"></p><div class="editor-actions"><button class="button button-primary" type="submit">Salvar regras de frete <span>↗</span></button></div></div>
+      </form>
     </section>
 
     <section class="admin-panel product-editor-panel" id="produtos">
@@ -51,6 +103,7 @@
           <label class="field">Categoria<select name="categoria" required><option value="">Selecione uma categoria</option><option>Camisetas</option><option>Moletons</option><option>Acessórios</option></select></label>
           <label class="field">Preço (R$)<input type="number" name="preco" placeholder="0,00" min="0.01" step="0.01" required></label>
           <label class="field">Estoque<input type="number" name="estoque" placeholder="Quantidade disponível" min="0" required></label>
+          <label class="field">Peso (gramas)<input type="number" name="peso" placeholder="Ex.: 300" min="0" max="100000" step="1" value="300" required></label>
           <label class="field">Tamanhos<input type="text" name="tamanhos" placeholder="Ex.: P, M, G, GG"></label>
           <label class="field">Etiqueta<input type="text" name="tag" placeholder="Ex.: NOVO"></label>
           <label class="field">URL da imagem<input type="url" name="imagem" placeholder="https://..." required></label>
@@ -68,19 +121,20 @@
     <section class="admin-panel orders-panel">
       <div class="panel-heading"><div><span class="panel-kicker">ACOMPANHAMENTO</span><h2>Pedidos recentes</h2></div><span class="panel-count" id="orders-count">0 PEDIDOS</span></div>
       <p class="privacy-note">Pedidos criados no checkout aparecem aqui. Os dados pessoais só podem ser acessados por este painel autenticado.</p>
+      <p class="form-note" id="orders-feedback" role="status" aria-live="polite"></p>
       <div class="table-wrap">
         <table class="orders-table">
-          <thead><tr><th>PEDIDO</th><th>CLIENTE</th><th>CONTATO</th><th>ENDEREÇO DE ENTREGA</th><th>ITENS</th><th>TOTAL</th><th>STATUS</th></tr></thead>
+          <thead><tr><th>PEDIDO</th><th>CLIENTE</th><th>CONTATO</th><th>ENDEREÇO DE ENTREGA</th><th>ITENS</th><th>TOTAL / PAGAMENTO</th><th>STATUS</th></tr></thead>
           <tbody id="orders-table-body"></tbody>
         </table>
       </div>
     </section>
 
-    <div class="admin-disclaimer"><span>✳</span> Protótipo de teste: ainda não processa pagamentos. Não utilize dados reais de clientes antes de definir retenção e controles de privacidade.</div>
+    <div class="admin-disclaimer"><span>✳</span> <div><strong>Como confirmar um pagamento PIX:</strong> confira no app do seu banco se entrou o valor exato do pedido (de preferência com o nome do cliente ou o código do pedido) e clique em <strong>Confirmar PIX</strong>. Pedidos pagos pelo Mercado Pago são confirmados automaticamente. Só envie pedidos com pagamento confirmado. Os dados dos clientes são pessoais: use-os só para entregar o pedido.</div></div>
   </main>
   <footer class="site-footer admin-footer">
     <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
-    <p>PAINEL DE ADMINISTRAÇÃO · PROTÓTIPO</p>
+    <p>PAINEL DE ADMINISTRAÇÃO</p>
     <small>© 2026 KRYPTO.</small>
   </footer>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
