@@ -95,15 +95,16 @@ $("#orders-refresh").addEventListener("click", load);
 $("#recover-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.currentTarget.elements, fb = $("#recover-feedback"), btn = e.currentTarget.querySelector('[type="submit"]');
-  if (!f.email.value.trim() || !f.code.value.trim()) return note(fb, "Informe o e-mail e o código do pedido.", true);
+  if (!f.email.value.trim() || f.phone.value.replace(/\D/g, "").length < 10) return note(fb, "Informe o e-mail e o telefone com DDD.", true);
   btn.disabled = true; note(fb, "Buscando…");
   try {
-    const response = await fetch("/api/orders/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: f.email.value, code: f.code.value }) });
+    const response = await fetch("/api/orders/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: f.email.value, phone: f.phone.value }) });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || "Não foi possível buscar o pedido.");
+    if (!response.ok) throw new Error(data.detail || "Não foi possível buscar seus pedidos.");
     (data.orders || []).forEach((o) => K.Orders.add(o.public_id));
-    note(fb, "Pedido encontrado e adicionado à lista.");
-    f.code.value = "";
+    const n = (data.orders || []).length;
+    note(fb, n === 1 ? "Pedido encontrado e adicionado à lista." : `${n} pedidos encontrados e adicionados à lista.`);
+    f.phone.value = "";
     await load();
   } catch (error) { note(fb, error.message, true); }
   btn.disabled = false;

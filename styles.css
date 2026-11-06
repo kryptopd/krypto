@@ -737,3 +737,27 @@ body.drawer-open { overflow: hidden; }
 .pix-alt code { display: block; padding: 12px; background: #17151c; border: 1px dashed #5b4380; font: 600 14px/1.45 ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
 .pix-alt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 640px) { .order-mini-steps { grid-template-columns: 1fr; } .order-mini-steps li { text-align: left; } .pix-alt-actions { grid-template-columns: 1fr; } }
+
+/* Painel de frete: tabela de estados recolhível */
+.shipping-states { margin: 22px 0; border: 1px solid #302c36; background: var(--surface); }
+.shipping-states > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; cursor: pointer; list-style: none; user-select: none; }
+.shipping-states > summary::-webkit-details-marker { display: none; }
+.shipping-states > summary:hover { background: var(--surface-light); }
+.shipping-states > summary:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
+.states-title { font: 600 15px var(--font-display); }
+.states-title small { display: block; margin-top: 2px; font: 400 12.5px var(--font-body); color: var(--muted); }
+.states-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--purple-bright); white-space: nowrap; }
+.states-toggle::after { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .2s; }
+.shipping-states[open] .states-toggle::after { transform: rotate(-135deg) translateY(-2px); }
+.shipping-states .when-open, .shipping-states[open] .when-closed { display: none; }
+.shipping-states[open] .when-open { display: inline; }
+.shipping-states[open] > summary { border-bottom: 1px solid #302c36; }
+@media (prefers-reduced-motion: reduce) { .states-toggle::after { transition: none; } }
+
+/* Pedido: levar o link para outro aparelho */
+.order-share { margin: 0 0 22px; padding: 16px; border: 1px dashed #38333f; }
+.order-share > strong { font: 600 15px var(--font-display); }
+.order-share > p { margin: 6px 0 12px; font-size: 13.5px; color: var(--muted); }
+.order-share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.order-share-actions .button { text-align: center; }
+@media (max-width: 640px) { .order-share-actions { grid-template-columns: 1fr; } }

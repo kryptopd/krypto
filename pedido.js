@@ -70,7 +70,26 @@ function render(data) {
     $("#pix-note").textContent = `Seu pedido fica reservado por ${data.pix_reserve_hours || 24} horas. Assim que identificarmos o pagamento, esta página muda para “Pagamento confirmado”. Pode fechar e voltar depois com o link deste pedido.`;
   }
   renderProgress(data.status);
+  renderShare(data);
 }
+
+// Link limpo do pedido (sem ?new=1 e sem parâmetros de retorno do pagamento).
+const orderLink = (publicId) => `${location.origin}${location.pathname}?order=${encodeURIComponent(publicId)}`;
+function renderShare(data) {
+  const box = $("#order-share");
+  if (!data || !data.public_id) { box.hidden = true; return; }
+  const link = orderLink(data.public_id);
+  $("#share-whatsapp").href = `https://wa.me/?text=${encodeURIComponent(`Acompanhe meu pedido #${data.public_id} na KRYPTO: ${link}`)}`;
+  box.hidden = false;
+}
+$("#share-copy").addEventListener("click", async () => {
+  const fb = $("#share-feedback");
+  if (!latest) return;
+  const link = orderLink(latest.public_id);
+  try { await navigator.clipboard.writeText(link); fb.textContent = "Link copiado! Abra no outro aparelho para acompanhar."; }
+  catch (_) { fb.textContent = `Copie o link: ${link}`; }
+  clearTimeout(fb.timer); fb.timer = setTimeout(() => { fb.textContent = ""; }, 5000);
+});
 
 async function refresh() {
   if (!id) throw new Error("Código do pedido ausente. Abra o link completo do seu pedido.");

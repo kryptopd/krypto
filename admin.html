@@ -70,12 +70,18 @@
           <button class="button button-outline" type="button" id="bulk-apply">Aplicar</button>
         </div>
 
-        <div class="table-wrap">
-          <table class="shipping-table">
-            <thead><tr><th>UF</th><th>ESTADO</th><th>ENTREGA</th><th>FRETE GRÁTIS</th><th>VALOR BASE (R$)</th><th>R$ POR KG EXTRA</th><th>PRAZO (DIAS)</th></tr></thead>
-            <tbody id="shipping-rows"></tbody>
-          </table>
-        </div>
+        <details class="shipping-states" id="shipping-states">
+          <summary>
+            <span class="states-title">Valores por estado <small id="states-meta"></small></span>
+            <span class="states-toggle"><span class="when-closed">Mostrar tabela</span><span class="when-open">Ocultar tabela</span></span>
+          </summary>
+          <div class="table-wrap">
+            <table class="shipping-table">
+              <thead><tr><th>UF</th><th>ESTADO</th><th>ENTREGA</th><th>FRETE GRÁTIS</th><th>VALOR BASE (R$)</th><th>R$ POR KG EXTRA</th><th>PRAZO (DIAS)</th></tr></thead>
+              <tbody id="shipping-rows"></tbody>
+            </table>
+          </div>
+        </details>
 
         <div class="shipping-sim">
           <strong>Simulador</strong>

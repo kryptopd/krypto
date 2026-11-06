@@ -251,7 +251,16 @@ function renderShipping(shipping, error) {
     const opt = element("option", `${uf} — ${UF_NAMES[uf]}`); opt.value = uf; simState.append(opt);
   });
   simState.value = "SP";
+  updateStatesMeta();
   simulate();
+}
+
+// Resumo mostrado quando a tabela de estados está recolhida.
+function updateStatesMeta() {
+  const meta = document.querySelector("#states-meta");
+  const ufs = Object.keys(UF_NAMES), f = shippingForm.elements;
+  const active = ufs.filter((uf) => f[`enabled-${uf}`]?.checked).length, free = ufs.filter((uf) => f[`free-${uf}`]?.checked).length;
+  meta.textContent = `${active} de ${ufs.length} estados ativos${free ? ` · ${free} com frete grátis` : ""}`;
 }
 
 // Lê o formulário no mesmo formato que a API valida.
@@ -290,6 +299,7 @@ function simulate() {
 }
 shippingForm.addEventListener("input", simulate);
 shippingForm.addEventListener("change", simulate);
+shippingForm.addEventListener("change", updateStatesMeta);
 
 document.querySelector("#bulk-apply").addEventListener("click", () => {
   const base = document.querySelector("#bulk-base").value.trim(), perKg = document.querySelector("#bulk-perkg").value.trim(), days = document.querySelector("#bulk-days").value.trim();
@@ -299,7 +309,7 @@ document.querySelector("#bulk-apply").addEventListener("click", () => {
     if (perKg) shippingForm.elements[`perkg-${uf}`].value = toReais(toCents(perKg) || 0);
     if (days) shippingForm.elements[`days-${uf}`].value = days;
   });
-  setMessage(shippingFeedback, "Valores aplicados na tabela. Clique em “Salvar regras de frete” para confirmar.");
+  setMessage(shippingFeedback, "Valores aplicados em todos os estados. Clique em “Salvar regras de frete” para confirmar.");
   simulate();
 });
 
@@ -307,7 +317,7 @@ shippingForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = shippingForm.querySelector('[type="submit"]');
   let settings;
-  try { settings = collectShipping(); } catch (error) { return setMessage(shippingFeedback, error.message, true); }
+  try { settings = collectShipping(); } catch (error) { document.querySelector("#shipping-states").open = true; return setMessage(shippingFeedback, error.message, true); }
   button.disabled = true; setMessage(shippingFeedback, "Salvando…");
   try {
     const saved = await api("/api/shipping", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });

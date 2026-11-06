@@ -31,15 +31,15 @@
       <div class="orders-list" id="orders-list" aria-live="polite"></div>
       <div class="orders-empty" id="orders-empty" hidden>
         <strong>Nenhum pedido neste aparelho</strong>
-        <p>Fez uma compra em outro celular ou computador? Recupere abaixo com o e-mail e o código do pedido.</p>
+        <p>Fez uma compra em outro celular ou computador? Recupere abaixo com o e-mail e o telefone usados na compra.</p>
       </div>
       <details class="orders-recover" id="orders-recover">
-        <summary>Recuperar um pedido</summary>
+        <summary>Comprou em outro aparelho? Recupere seus pedidos</summary>
         <form class="auth-form" id="recover-form" novalidate>
           <label class="field">E-mail usado na compra<input name="email" type="email" inputmode="email" autocomplete="email" placeholder="voce@email.com" required></label>
-          <label class="field">Código do pedido<input name="code" type="text" autocomplete="off" placeholder="Ex.: A1B2C3D4" required></label>
+          <label class="field">Telefone usado na compra<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(32) 99999-9999" required></label>
           <p class="form-note" id="recover-feedback" role="status" aria-live="polite"></p>
-          <button class="button button-primary" type="submit">Buscar pedido <span aria-hidden="true">↗</span></button>
+          <button class="button button-primary" type="submit">Buscar meus pedidos <span aria-hidden="true">↗</span></button>
         </form>
       </details>
       <div class="account-actions"><a class="button button-primary" href="index.html#colecao">Continuar comprando <span aria-hidden="true">↗</span></a></div>
