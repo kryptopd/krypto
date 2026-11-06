@@ -29,9 +29,14 @@ module.exports = async function handler(req, res) {
         .reduce((sum, o) => sum + Number(o.total_cents || 0), 0)
     };
     // Se a migração ainda não foi executada, o painel continua abrindo e avisa na área de frete.
+    // Categorias: se a migração ainda não rodou, o painel abre e avisa na aba Categorias.
+    let categories = [], categoriesError = null;
+    const categoriesResult = await supabase.from("categories").select("id,name,created_at").order("name", { ascending: true });
+    if (categoriesResult.error) categoriesError = "Execute a migração 20261107_photos_sizes_categories.sql no Supabase para usar categorias e fotos.";
+    else categories = categoriesResult.data || [];
     let shipping = null, shippingError = null;
     try { shipping = await readSettings(supabase); } catch (e) { shippingError = e.message; }
-    return res.status(200).json({ stats, products, orders, shipping, shipping_error: shippingError });
+    return res.status(200).json({ stats, products, orders, categories, categories_error: categoriesError, shipping, shipping_error: shippingError });
   } catch (error) {
     return sendError(res, error);
   }

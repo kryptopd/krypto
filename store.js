@@ -1,6 +1,7 @@
 const { money, Cart } = window.Krypto;
 const productGrid = document.querySelector("#product-grid");
-const categoryLinks = [...document.querySelectorAll("[data-category]")];
+const mainNav = document.querySelector("#main-nav");
+const categoryRow = document.querySelector("#category-row");
 const productCount = document.querySelector("#product-count");
 const searchInput = document.querySelector("#search-input");
 const sortSelect = document.querySelector("#sort-select");
@@ -36,11 +37,47 @@ function visibleProducts() {
   const q = normalizeText(query);
   const list = products.filter((p) =>
     (!selectedCategory || p.category === selectedCategory) &&
-    (!q || normalizeText(`${p.name} ${p.category} ${p.description} ${p.tag}`).includes(q)));
+    (!q || normalizeText(`${p.name} ${p.category} ${p.description}`).includes(q)));
   if (sortBy === "price-asc") list.sort((a, b) => a.price_cents - b.price_cents);
   else if (sortBy === "price-desc") list.sort((a, b) => b.price_cents - a.price_cents);
   else if (sortBy === "name") list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   return list;
+}
+
+// Galeria da peça: rolagem lateral com encaixe (arrastar no celular), setas e bolinhas. Até 4 fotos.
+function gallery(product) {
+  const urls = (product.images && product.images.length ? product.images : [product.image_url]).filter(Boolean).slice(0, 4);
+  const box = el("div", undefined, "product-image product-gallery");
+  box.setAttribute("role", "group");
+  box.setAttribute("aria-label", urls.length > 1 ? `Fotos de ${product.name}` : product.name);
+  const track = el("div", undefined, "gallery-track");
+  urls.forEach((url, i) => {
+    const img = document.createElement("img");
+    img.src = url; img.alt = urls.length > 1 ? `${product.name}, foto ${i + 1} de ${urls.length}` : product.name;
+    img.loading = i === 0 ? "eager" : "lazy"; img.decoding = "async"; img.draggable = false;
+    track.append(img);
+  });
+  box.append(track);
+  if (urls.length < 2) return box;
+
+  const dots = el("div", undefined, "gallery-dots");
+  const dotNodes = urls.map(() => { const d = el("span"); dots.append(d); return d; });
+  const prev = el("button", "‹", "gallery-nav gallery-prev"), next = el("button", "›", "gallery-nav gallery-next");
+  prev.type = next.type = "button";
+  prev.setAttribute("aria-label", "Foto anterior"); next.setAttribute("aria-label", "Próxima foto");
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const index = () => Math.max(0, Math.min(urls.length - 1, Math.round((track.scrollLeft || 0) / (track.clientWidth || 1))));
+  const sync = () => {
+    const i = index();
+    dotNodes.forEach((d, n) => d.classList.toggle("on", n === i));
+    prev.disabled = i === 0; next.disabled = i === urls.length - 1;
+  };
+  const go = (delta) => track.scrollTo({ left: (index() + delta) * track.clientWidth, behavior: reduce ? "auto" : "smooth" });
+  prev.addEventListener("click", () => go(-1)); next.addEventListener("click", () => go(1));
+  track.addEventListener("scroll", () => requestAnimationFrame(sync), { passive: true });
+  box.append(prev, next, dots);
+  sync();
+  return box;
 }
 
 function productCard(product) {
@@ -48,16 +85,13 @@ function productCard(product) {
   const card = el("article", undefined, soldOut ? "product-card sold-out" : "product-card");
   let chosenSize = product.sizes.length === 1 ? product.sizes[0] : "";
 
-  const image = el("div", undefined, "product-image");
-  image.style.backgroundImage = `url("${product.image_url}")`;
-  image.setAttribute("role", "img");
-  image.setAttribute("aria-label", product.name);
+  const image = gallery(product);
   if (soldOut) image.append(el("span", "ESGOTADO", "product-tag product-tag-sold"));
-  else if (product.tag) image.append(el("span", product.tag, "product-tag"));
 
   const info = el("div", undefined, "product-info");
   const text = el("div");
-  text.append(el("span", product.category.toUpperCase(), "product-category"), el("h3", product.name));
+  if (product.category) text.append(el("span", product.category.toUpperCase(), "product-category"));
+  text.append(el("h3", product.name));
   const lowStock = !soldOut && Number(product.stock) <= 3;
   if (lowStock) text.append(el("p", `Últimas ${product.stock} unidades`, "low-stock"));
   else if (product.description) text.append(el("p", product.description, "product-desc"));
@@ -110,11 +144,38 @@ function renderProducts() {
 
 function setCategory(category) {
   selectedCategory = category;
-  categoryLinks.forEach((item) => item.classList.toggle("active", item.dataset.category === category));
+  document.querySelectorAll("[data-category]").forEach((item) => item.classList.toggle("active", item.dataset.category === category));
   renderProducts();
 }
-categoryLinks.forEach((link) => link.addEventListener("click", (e) => { e.preventDefault(); setCategory(link.dataset.category); }));
-document.querySelectorAll("[data-nav-category]").forEach((link) => link.addEventListener("click", () => setCategory(link.dataset.navCategory)));
+document.querySelector('[data-category=""]').addEventListener("click", (e) => { e.preventDefault(); setCategory(""); });
+document.querySelector('[data-nav-category=""]').addEventListener("click", () => setCategory(""));
+
+// Categorias criadas no painel: só aparecem as que têm peça na vitrine.
+function renderCategoryLinks(names) {
+  document.querySelectorAll(".dyn-category").forEach((n) => n.remove());
+  const sortBox = categoryRow.querySelector(".sort-box");
+  names.forEach((name) => {
+    const chip = el("a", name, "category dyn-category");
+    chip.href = "#colecao"; chip.dataset.category = name;
+    chip.addEventListener("click", (e) => { e.preventDefault(); setCategory(name); });
+    categoryRow.insertBefore(chip, sortBox);
+    const link = el("a", name, "dyn-category");
+    link.href = "#colecao"; link.dataset.navCategory = name;
+    link.addEventListener("click", () => setCategory(name));
+    mainNav.append(link);
+  });
+  if (selectedCategory && !names.includes(selectedCategory)) selectedCategory = "";
+  document.querySelectorAll("[data-category]").forEach((item) => item.classList.toggle("active", item.dataset.category === selectedCategory));
+}
+async function loadCategoryNames() {
+  const inUse = new Set(products.map((p) => p.category).filter(Boolean));
+  try {
+    const response = await fetch("/api/products?categories=1");
+    if (!response.ok) throw new Error("categorias indisponíveis");
+    const listed = (await response.json()).map((c) => c.name);
+    return listed.filter((name) => inUse.has(name));
+  } catch (_) { return [...inUse]; }   // sem a lista, usa as categorias das próprias peças
+}
 searchInput.addEventListener("input", () => { query = searchInput.value; renderProducts(); });
 document.querySelector("#search-form").addEventListener("submit", (e) => { e.preventDefault(); document.querySelector("#colecao").scrollIntoView(); });
 sortSelect.addEventListener("change", () => { sortBy = sortSelect.value; renderProducts(); });
@@ -219,6 +280,7 @@ window.Krypto.loadProducts().then((list) => {
   products = list;
   productCount.textContent = String(products.length).padStart(2, "0");
   renderProducts();
+  loadCategoryNames().then((names) => { renderCategoryLinks(names); renderProducts(); });
   // Limpa da sacola produtos que saíram do catálogo.
   const ids = new Set(products.map((p) => p.id));
   const kept = Cart.lines().filter((l) => ids.has(l.product_id));

@@ -1,5 +1,15 @@
 # KRYPTO — loja virtual (Vercel + Supabase + PIX + Mercado Pago)
 
+## Fotos enviadas pelo painel, tamanhos M/G/GG/G1 e categorias (novo)
+
+- **Fotos sem URL:** em *Produtos*, o admin escolhe até **4 fotos** do celular/computador. A página reduz cada foto (máx. 1400 px, JPEG) e envia para o **Supabase Storage** (pasta pública `product-images`, criada sozinha no primeiro envio se não existir). A primeira foto é a capa (usada na sacola e no checkout); dá para reordenar com ◀ ▶ e remover. Fotos retiradas de um produto são apagadas do Storage ao salvar.
+- **Vitrine:** cada peça mostra todas as fotos (arrastar no celular, setas e bolinhas no computador).
+- **Tamanhos:** botões **M, G, GG, G1** (nenhum marcado = tamanho único, ex.: acessórios). A API só aceita esses quatro. Produtos antigos com outros tamanhos (ex.: P) continuam vendendo até serem editados.
+- **Etiqueta:** campo removido (do painel, da API e da vitrine). A coluna `tag` continua no banco, sem uso.
+- **Categorias:** nova aba **Categorias** no painel (criar e apagar). Cada peça escolhe uma categoria no cadastro (ou "Sem categoria"). Apagar uma categoria **não** apaga as peças: elas ficam sem categoria. A vitrine mostra como filtro só as categorias que têm peça.
+- **Limite de funções da Vercel (plano gratuito = 12):** produtos, categorias e envio de fotos foram juntados em **uma** função, `api/admin/catalog.js` (`?r=products|categories|upload`), e a lista pública de categorias é `GET /api/products?categories=1`. Os arquivos `api/admin/products.js` e `api/admin/products/[id].js` foram removidos; o projeto passou de 12 para 11 funções.
+- **Migração obrigatória:** execute `supabase/migrations/20261107_photos_sizes_categories.sql` no SQL Editor (cria `images`, a tabela `categories`, libera categorias novas e cria a pasta de fotos). Sem ela o painel abre, mas avisa e recusa salvar produtos; a vitrine segue funcionando com a foto única.
+
 ## Compra sem cadastro, "Meus pedidos" e PIX com valor preenchido (novo)
 
 - **Sem conta de cliente:** o cliente não cria mais login no Supabase Auth, então não consome o limite de usuários. O checkout pede nome, e-mail, telefone e endereço; esses dados vão só no pedido (uma linha na tabela `orders`, apenas de quem realmente compra). O Supabase Auth continua sendo usado **somente pelo admin**.
@@ -26,7 +36,7 @@ Este projeto implementa catálogo, checkout com criação de pedido, estoque res
 
 ### 1. Banco de dados
 - Em um projeto Supabase novo, execute `supabase/schema.sql` no SQL Editor.
-- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql`, `20261105_pix.sql` e `20261106_shipping_cart_accounts.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
+- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql`, `20261105_pix.sql`, `20261106_shipping_cart_accounts.sql` e `20261107_photos_sizes_categories.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
 - Não exponha `SUPABASE_SERVICE_ROLE_KEY` no navegador.
 
 ### 2. Variáveis de ambiente da Vercel
@@ -92,7 +102,8 @@ A implementação de autenticação foi mantida sem alterações neste pacote, c
 - `GET /api/orders/:id` (retorna status e valores, sem dados pessoais)
 - `POST /api/webhooks/mercadopago`
 - `GET /api/cron/expire-orders` (protegida por `CRON_SECRET`)
-- Rotas administrativas já existentes para produtos e pedidos.
+- `GET /api/products?categories=1` (categorias da loja)
+- Rotas administrativas: `/api/admin/catalog` (produtos, categorias e fotos), `/api/admin/dashboard` e `/api/admin/orders/:id`.
 
 ### 8. Testes obrigatórios antes de produção
 - Compra com pagamento aprovado/recusado/pendente.
