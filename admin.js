@@ -340,6 +340,10 @@ async function loadDashboard() {
   document.querySelector("#stat-orders").textContent = String(data.stats.order_count);
   document.querySelector("#stat-pending").textContent = `${data.stats.pending_count} aguardando`;
   document.querySelector("#stat-sales").textContent = money(data.stats.sales_cents);
+  document.querySelector("#stat-stock").textContent = String(data.stats.units_in_stock || 0);
+  document.querySelector("#stat-low-stock").textContent = String(data.stats.low_stock_count || 0);
+  document.querySelector("#stat-out-stock").textContent = `${data.stats.out_of_stock_count || 0} esgotados`;
+  document.querySelector("#stat-ticket").textContent = money(data.stats.average_ticket_cents || 0);
   categories = data.categories || [];
   renderProducts(data.products.filter((p) => p.active));   // "Excluir" só tira da vitrine; some também da lista do painel
   renderCategories(data.categories_error);

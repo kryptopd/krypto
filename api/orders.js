@@ -14,6 +14,8 @@ module.exports = async function handler(req, res) {
     if (String(body.website || "").trim()) return res.status(400).json({ detail: "Requisição inválida." }); // campo isca anti-robô
     // Sem o campo, mantém o comportamento anterior (Mercado Pago).
     const paymentMethod = body.payment_method === "pix" ? "pix" : "mercadopago";
+    // Valida a configuração do PIX antes de reservar estoque ou criar o pedido.
+    const pixSettings = paymentMethod === "pix" ? pixConfig() : null;
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
     if (paymentMethod === "mercadopago" && !accessToken) {
       const error = new Error("O pagamento por cartão ainda não está disponível. Escolha PIX ou tente novamente mais tarde.");
@@ -90,7 +92,7 @@ module.exports = async function handler(req, res) {
         return res.status(503).json({ detail: "O pagamento por PIX está sendo configurado. Tente novamente em instantes ou escolha outra forma de pagamento." });
       }
       createdPublicId = null;
-      const pix = pixConfig();
+      const pix = pixSettings;
       res.setHeader("Cache-Control", "no-store");
       return res.status(201).json({
         id: order.public_id, payment_method: "pix", subtotal_cents: order.subtotal_cents,

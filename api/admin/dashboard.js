@@ -26,7 +26,14 @@ module.exports = async function handler(req, res) {
       order_count: allOrders.length,
       pending_count: allOrders.filter((o) => ["aguardando", "aguardando_pagamento"].includes(o.status)).length,
       sales_cents: allOrders.filter((o) => o.payment_status === "approved" && o.status !== "cancelado")
-        .reduce((sum, o) => sum + Number(o.total_cents || 0), 0)
+        .reduce((sum, o) => sum + Number(o.total_cents || 0), 0),
+      low_stock_count: products.filter((p) => p.active && Number(p.stock) > 0 && Number(p.stock) <= 3).length,
+      out_of_stock_count: products.filter((p) => p.active && Number(p.stock) === 0).length,
+      units_in_stock: products.filter((p) => p.active).reduce((sum, p) => sum + Number(p.stock || 0), 0),
+      average_ticket_cents: (() => {
+        const paid = allOrders.filter((o) => o.payment_status === "approved" && o.status !== "cancelado");
+        return paid.length ? Math.round(paid.reduce((sum, o) => sum + Number(o.total_cents || 0), 0) / paid.length) : 0;
+      })()
     };
     // Se a migração ainda não foi executada, o painel continua abrindo e avisa na área de frete.
     // Categorias: se a migração ainda não rodou, o painel abre e avisa na aba Categorias.

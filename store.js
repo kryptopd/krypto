@@ -14,7 +14,32 @@ let products = [];
 let selectedCategory = "";
 let query = "";
 let sortBy = "new";
+let maxPrice = null;
+let inStockOnly = false;
+let favoritesOnly = false;
+let activeQuickProduct = null;
+let quickChosenSize = "";
 let lastFocus = null;
+const FAVORITES_KEY = "krypto-favorites-v1";
+const RECENT_KEY = "krypto-recent-v1";
+const readIds = (key) => { try { const v = JSON.parse(localStorage.getItem(key) || "[]"); return Array.isArray(v) ? v.filter(Number.isSafeInteger) : []; } catch (_) { return []; } };
+let favorites = readIds(FAVORITES_KEY);
+let recentIds = readIds(RECENT_KEY);
+const saveIds = (key, ids) => { try { localStorage.setItem(key, JSON.stringify(ids)); } catch (_) {} };
+const isFavorite = (id) => favorites.includes(id);
+function updateFavoritesUI() {
+  const count = document.querySelector("#favorites-count");
+  if (count) count.textContent = String(favorites.length);
+  const button = document.querySelector("#favorites-only");
+  if (button) { button.setAttribute("aria-pressed", String(favoritesOnly)); button.classList.toggle("active", favoritesOnly); button.firstChild.textContent = favoritesOnly ? "♥ Favoritos " : "♡ Favoritos "; }
+}
+function toggleFavorite(id) {
+  favorites = isFavorite(id) ? favorites.filter((x) => x !== id) : [...favorites, id];
+  saveIds(FAVORITES_KEY, favorites); updateFavoritesUI();
+  renderProducts();
+  if (activeQuickProduct && activeQuickProduct.id === id) syncQuickFavorite();
+  toast(isFavorite(id) ? "Peça adicionada aos favoritos." : "Peça removida dos favoritos.");
+}
 
 const el = (tag, text, className) => {
   const node = document.createElement(tag);
@@ -37,7 +62,10 @@ function visibleProducts() {
   const q = normalizeText(query);
   const list = products.filter((p) =>
     (!selectedCategory || p.category === selectedCategory) &&
-    (!q || normalizeText(`${p.name} ${p.category} ${p.description}`).includes(q)));
+    (!q || normalizeText(`${p.name} ${p.category} ${p.description}`).includes(q)) &&
+    (maxPrice === null || Number(p.price_cents) <= maxPrice) &&
+    (!inStockOnly || Number(p.stock) > 0) &&
+    (!favoritesOnly || isFavorite(p.id)));
   if (sortBy === "price-asc") list.sort((a, b) => a.price_cents - b.price_cents);
   else if (sortBy === "price-desc") list.sort((a, b) => b.price_cents - a.price_cents);
   else if (sortBy === "name") list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
@@ -86,6 +114,11 @@ function productCard(product) {
   let chosenSize = product.sizes.length === 1 ? product.sizes[0] : "";
 
   const image = gallery(product);
+  const favorite = el("button", isFavorite(product.id) ? "♥" : "♡", "product-favorite");
+  favorite.type = "button"; favorite.setAttribute("aria-label", isFavorite(product.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"); favorite.setAttribute("aria-pressed", String(isFavorite(product.id)));
+  favorite.addEventListener("click", () => toggleFavorite(product.id));
+  const quick = el("button", "Ver detalhes", "product-quick"); quick.type = "button"; quick.addEventListener("click", () => openQuickView(product));
+  image.append(favorite, quick);
   if (soldOut) image.append(el("span", "ESGOTADO", "product-tag product-tag-sold"));
 
   const info = el("div", undefined, "product-info");
@@ -96,6 +129,7 @@ function productCard(product) {
   if (lowStock) text.append(el("p", `Últimas ${product.stock} unidades`, "low-stock"));
   else if (product.description) text.append(el("p", product.description, "product-desc"));
   info.append(text, el("strong", money(product.price_cents), "product-price"));
+  if (Number(product.stock) > 0 && Number(product.stock) <= 3) info.append(el("span", "ÚLTIMAS UNIDADES", "stock-pill"));
 
   const buy = el("div", undefined, "product-buy");
   const message = el("p", "", "product-msg");
@@ -139,7 +173,9 @@ function renderProducts() {
     return;
   }
   list.forEach((p) => productGrid.append(productCard(p)));
-  resultsNote.textContent = query || selectedCategory ? `${list.length} ${list.length === 1 ? "peça encontrada" : "peças encontradas"}` : "";
+  const filtersActive = query || selectedCategory || maxPrice !== null || inStockOnly || favoritesOnly;
+  resultsNote.textContent = filtersActive ? `${list.length} ${list.length === 1 ? "peça encontrada" : "peças encontradas"}` : `${list.length} ${list.length === 1 ? "peça disponível" : "peças disponíveis"}`;
+  updateFavoritesUI();
 }
 
 function setCategory(category) {
@@ -179,6 +215,59 @@ async function loadCategoryNames() {
 searchInput.addEventListener("input", () => { query = searchInput.value; renderProducts(); });
 document.querySelector("#search-form").addEventListener("submit", (e) => { e.preventDefault(); document.querySelector("#colecao").scrollIntoView(); });
 sortSelect.addEventListener("change", () => { sortBy = sortSelect.value; renderProducts(); });
+document.querySelector("#price-max").addEventListener("input", (event) => { const value = Number(event.target.value); maxPrice = event.target.value.trim() && Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : null; renderProducts(); });
+document.querySelector("#in-stock-only").addEventListener("change", (event) => { inStockOnly = event.target.checked; renderProducts(); });
+document.querySelector("#favorites-only").addEventListener("click", () => { favoritesOnly = !favoritesOnly; renderProducts(); });
+document.querySelector("#clear-filters").addEventListener("click", () => { query = ""; selectedCategory = ""; maxPrice = null; inStockOnly = false; favoritesOnly = false; searchInput.value = ""; sortSelect.value = "new"; document.querySelector("#price-max").value = ""; document.querySelector("#in-stock-only").checked = false; setCategory(""); renderProducts(); });
+
+// ---------- Visualização rápida e favoritos ----------
+const quickView = document.querySelector("#quick-view");
+const quickMedia = document.querySelector("#quick-media");
+function syncQuickFavorite() {
+  const button = document.querySelector("#quick-favorite");
+  if (!activeQuickProduct) return;
+  button.textContent = isFavorite(activeQuickProduct.id) ? "♥ Remover dos favoritos" : "♡ Adicionar aos favoritos";
+}
+function rememberViewed(product) {
+  recentIds = [product.id, ...recentIds.filter((id) => id !== product.id)].slice(0, 4);
+  saveIds(RECENT_KEY, recentIds); renderRecent();
+}
+function openQuickView(product) {
+  activeQuickProduct = product; quickChosenSize = product.sizes.length === 1 ? product.sizes[0] : "";
+  quickMedia.replaceChildren();
+  const urls = (product.images && product.images.length ? product.images : [product.image_url]).filter(Boolean).slice(0, 4);
+  urls.forEach((url, i) => { const img = document.createElement("img"); img.src = url; img.alt = `${product.name}, imagem ${i + 1}`; img.loading = i ? "lazy" : "eager"; quickMedia.append(img); });
+  document.querySelector("#quick-category").textContent = product.category || "KRYPTO";
+  document.querySelector("#quick-title").textContent = product.name;
+  document.querySelector("#quick-price").textContent = money(product.price_cents);
+  document.querySelector("#quick-description").textContent = product.description || "Uma peça KRYPTO feita para expressar sua atitude.";
+  const sizes = document.querySelector("#quick-sizes"); sizes.replaceChildren();
+  if (product.sizes.length) {
+    sizes.append(el("span", "ESCOLHA O TAMANHO", "quick-size-label"));
+    product.sizes.forEach((size) => { const b = el("button", size, "size-chip"); b.type = "button"; b.setAttribute("aria-pressed", String(size === quickChosenSize)); b.addEventListener("click", () => { quickChosenSize = size; sizes.querySelectorAll(".size-chip").forEach((n) => n.setAttribute("aria-pressed", String(n === b))); }); sizes.append(b); });
+  } else sizes.append(el("span", "Tamanho único", "quick-size-label"));
+  document.querySelector("#quick-stock").textContent = Number(product.stock) > 0 ? `${product.stock} ${product.stock === 1 ? "unidade disponível" : "unidades disponíveis"}` : "Produto esgotado";
+  document.querySelector("#quick-add").disabled = Number(product.stock) < 1;
+  syncQuickFavorite(); rememberViewed(product);
+  lastFocus = document.activeElement; quickView.hidden = false; document.body.classList.add("quick-open"); document.querySelector("#quick-view .quick-close").focus();
+}
+function closeQuickView() { quickView.hidden = true; document.body.classList.remove("quick-open"); if (lastFocus && lastFocus.focus) lastFocus.focus(); activeQuickProduct = null; }
+quickView.querySelectorAll("[data-quick-close]").forEach((b) => b.addEventListener("click", closeQuickView));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !quickView.hidden) closeQuickView(); });
+document.querySelector("#quick-favorite").addEventListener("click", () => { if (activeQuickProduct) toggleFavorite(activeQuickProduct.id); });
+document.querySelector("#quick-add").addEventListener("click", () => {
+  if (!activeQuickProduct) return;
+  if (activeQuickProduct.sizes.length && !quickChosenSize) { toast("Escolha um tamanho antes de continuar."); return; }
+  const existing = Cart.lines().filter((l) => l.product_id === activeQuickProduct.id).reduce((n, l) => n + l.quantity, 0);
+  if (existing >= activeQuickProduct.stock) { toast("Estoque máximo já atingido na sacola."); return; }
+  Cart.add(activeQuickProduct.id, quickChosenSize, 1, activeQuickProduct.stock - existing); toast(`${activeQuickProduct.name} foi para a sacola.`); closeQuickView();
+});
+function renderRecent() {
+  const section = document.querySelector("#recent-section"), grid = document.querySelector("#recent-grid");
+  if (!section || !grid) return;
+  const list = recentIds.map(productById).filter(Boolean);
+  section.hidden = !list.length; grid.replaceChildren(); list.forEach((p) => grid.append(productCard(p)));
+}
 
 // ---------- Sacola (gaveta) ----------
 function renderDrawer() {
@@ -227,6 +316,12 @@ function renderDrawer() {
     drawerBody.append(row);
   });
   document.querySelector("#drawer-subtotal").textContent = money(subtotal);
+  const goal = Number(window.Krypto.freeShippingGoal || 0);
+  const progress = document.querySelector("#free-shipping-progress");
+  if (progress) {
+    if (goal > 0) { const remaining = Math.max(0, goal - subtotal); progress.hidden = false; progress.querySelector("strong").textContent = remaining ? `Faltam ${money(remaining)} para ganhar frete grátis` : "Você desbloqueou o frete grátis!"; progress.querySelector("i").style.width = `${Math.min(100, subtotal / goal * 100)}%`; }
+    else progress.hidden = true;
+  }
   document.querySelector("#drawer-buy").disabled = blocked;
   drawerFoot.hidden = false;
 }
@@ -255,12 +350,14 @@ document.querySelector("#drawer-buy").addEventListener("click", () => window.Kry
 // ---------- Faixa de avisos (frete grátis, se a loja tiver) ----------
 fetch("/api/shipping").then((r) => (r.ok ? r.json() : null)).then((info) => {
   if (!info) return;
+  window.Krypto.freeShippingGoal = Number(info.free_over_cents || 0);
   const text = document.querySelector("#announce-text"), benefit = document.querySelector("#benefit-shipping");
   if (info.free_shipping) { text.textContent = "Frete grátis em todos os pedidos · Pague com PIX"; benefit.textContent = "Frete grátis em todos os pedidos"; }
   else if (info.free_over_cents > 0) {
     text.textContent = `Frete grátis em compras acima de ${money(info.free_over_cents)} · Pague com PIX`;
     benefit.textContent = `Frete grátis acima de ${money(info.free_over_cents)}`;
   }
+  if (!drawer.hidden) renderDrawer();
 }).catch(() => {});
 
 // ---------- Acesso discreto ao painel: 5 cliques rápidos no "©" do rodapé ----------
@@ -280,9 +377,13 @@ window.Krypto.loadProducts().then((list) => {
   products = list;
   productCount.textContent = String(products.length).padStart(2, "0");
   renderProducts();
+  renderRecent();
+  updateFavoritesUI();
   loadCategoryNames().then((names) => { renderCategoryLinks(names); renderProducts(); });
   // Limpa da sacola produtos que saíram do catálogo.
   const ids = new Set(products.map((p) => p.id));
+  favorites = favorites.filter((id) => ids.has(id)); saveIds(FAVORITES_KEY, favorites);
+  recentIds = recentIds.filter((id) => ids.has(id)); saveIds(RECENT_KEY, recentIds); renderRecent(); updateFavoritesUI();
   const kept = Cart.lines().filter((l) => ids.has(l.product_id));
   if (kept.length !== Cart.lines().length) Cart.replace(kept);
 }).catch((error) => {

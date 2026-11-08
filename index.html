@@ -93,11 +93,22 @@
           </select>
         </label>
       </div>
+      <div class="catalog-tools" aria-label="Filtros do catálogo">
+        <label class="catalog-price">Preço máximo <span>R$</span><input id="price-max" type="number" min="0" step="10" inputmode="decimal" placeholder="Sem limite" aria-label="Preço máximo em reais"></label>
+        <label class="catalog-stock"><input id="in-stock-only" type="checkbox"> Somente disponíveis</label>
+        <button class="catalog-favorites" id="favorites-only" type="button" aria-pressed="false">♡ Favoritos <span id="favorites-count">0</span></button>
+        <button class="catalog-clear" id="clear-filters" type="button">Limpar filtros</button>
+      </div>
       <p class="results-note" id="results-note" role="status" aria-live="polite"></p>
 
       <div class="product-grid" id="product-grid" aria-live="polite" aria-busy="true">
         <div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div><div class="product-skeleton" aria-hidden="true"></div>
       </div>
+    </section>
+
+    <section class="recent-section section-wrap" id="recent-section" hidden>
+      <div class="section-heading"><div><span class="eyebrow"><span class="eyebrow-line"></span> CONTINUE DE ONDE PAROU</span><h2>VISTAS <span>RECENTEMENTE</span></h2></div><p>As peças que chamaram sua atenção.</p></div>
+      <div class="product-grid recent-grid" id="recent-grid"></div>
     </section>
 
     <section class="manifesto" id="sobre">
@@ -112,24 +123,29 @@
     </section>
 
     <section class="newsletter shop-cta" id="contato">
-      <div><span class="eyebrow"><span class="eyebrow-line"></span> DROP 01 · PEÇAS LIMITADAS</span><h2>Seu próximo <span>drop.</span></h2></div>
-      <a class="button button-primary" href="#colecao">Voltar às peças <span aria-hidden="true">↗</span></a>
+      <div><span class="eyebrow"><span class="eyebrow-line"></span> NÃO PERCA O PRÓXIMO DROP</span><h2>Seu próximo <span>drop.</span></h2><p>Novidades, peças limitadas e atitude. Acompanhe a KRYPTO.</p></div>
+      <a class="button button-primary" href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer">Acompanhar novidades <span aria-hidden="true">↗</span></a>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <a class="brand" href="index.html">
-      <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
-      <span>KRYPTO<span class="brand-dot">.</span></span>
-    </a>
-    <p>VISTA SUA ATITUDE. DESDE 2024.</p>
-    <small><span id="copyright-mark">©</span> 2026 KRYPTO. Feito para quem faz as próprias regras.</small>
-  <nav class="legal-links" aria-label="Informações legais"><a href="privacidade.html">Privacidade</a><a href="termos.html">Termos de compra</a><a href="trocas-devolucoes.html">Trocas e devoluções</a></nav></footer>
+  <footer class="site-footer site-footer-expanded">
+    <div class="footer-main">
+      <div class="footer-brand-col">
+        <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
+        <p>VISTA SUA ATITUDE.<br>FEITA PARA QUEM FAZ AS PRÓPRIAS REGRAS.</p>
+      </div>
+      <div class="footer-col"><strong>EXPLORAR</strong><a href="#colecao">Coleção</a><a href="#sobre">Nossa história</a><a href="conta.html">Meus pedidos</a></div>
+      <div class="footer-col"><strong>AJUDA</strong><a href="trocas-devolucoes.html">Trocas e devoluções</a><a href="termos.html">Termos de compra</a><a href="privacidade.html">Privacidade</a></div>
+      <div class="footer-col"><strong>KRYPTO</strong><span>Moda urbana independente.</span><span>Novidades e atendimento pelos canais oficiais da marca.</span></div>
+    </div>
+    <div class="footer-bottom"><small><span id="copyright-mark">©</span> 2026 KRYPTO. Todos os direitos reservados.</small><small>MODA URBANA · BRASIL</small></div>
+  </footer>
   <div class="drawer-overlay" id="drawer-overlay" hidden></div>
   <aside class="cart-drawer" id="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title" hidden>
     <div class="drawer-head"><h2 id="cart-title">Sua sacola <span id="drawer-count"></span></h2><button type="button" class="drawer-close" id="cart-close" aria-label="Fechar sacola">×</button></div>
     <div class="drawer-body" id="drawer-body"></div>
     <div class="drawer-foot" id="drawer-foot" hidden>
+      <div class="free-shipping-progress" id="free-shipping-progress" hidden><strong></strong><span><i></i></span></div>
       <div class="drawer-subtotal"><span>Subtotal</span><strong id="drawer-subtotal">R$ 0,00</strong></div>
       <p class="drawer-note">O frete é calculado no próximo passo, de acordo com o seu estado e o peso das peças.</p>
       <button class="button button-primary drawer-buy" id="drawer-buy" type="button">Fazer compra <span aria-hidden="true">↗</span></button>
@@ -137,6 +153,10 @@
     </div>
   </aside>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <section class="quick-view" id="quick-view" role="dialog" aria-modal="true" aria-labelledby="quick-title" hidden>
+    <button class="quick-backdrop" type="button" data-quick-close aria-label="Fechar detalhes"></button>
+    <div class="quick-panel"><button class="quick-close" type="button" data-quick-close aria-label="Fechar">×</button><div class="quick-media" id="quick-media"></div><div class="quick-content"><span class="eyebrow">DETALHES DA PEÇA</span><p class="product-category" id="quick-category"></p><h2 id="quick-title"></h2><strong class="quick-price" id="quick-price"></strong><p id="quick-description"></p><div class="quick-sizes" id="quick-sizes"></div><p class="quick-stock" id="quick-stock"></p><button class="button button-primary" id="quick-add" type="button">Adicionar à sacola ↗</button><button class="quick-favorite" id="quick-favorite" type="button">♡ Adicionar aos favoritos</button></div></div>
+  </section>
   <script src="shop.js"></script>
   <script src="store.js" defer></script>
 </body>
