@@ -1,23 +1,23 @@
 // KRYPTO API router: one Vercel Serverless Function dispatches to focused handlers.
-// The actual business logic remains modular under api/_handlers (private to Vercel routing).
+// The actual business logic remains modular under server/_handlers (private to Vercel routing).
 const handlers = {
-  adminCatalog: require("./_handlers/admin/catalog"),
-  adminDashboard: require("./_handlers/admin/dashboard"),
-  adminOrder: require("./_handlers/admin/orders/[id]"),
-  adminProducts: require("./_handlers/admin/products"),
-  adminReviews: require("./_handlers/admin/reviews"),
-  adminSupport: require("./_handlers/admin/support"),
-  adminSupportItem: require("./_handlers/admin/support/[id]"),
-  authConfig: require("./_handlers/auth/config"),
-  expireOrders: require("./_handlers/cron/expire-orders"),
-  createOrder: require("./_handlers/orders"),
-  getOrder: require("./_handlers/orders/[id]"),
-  lookupOrders: require("./_handlers/orders/lookup"),
-  products: require("./_handlers/products"),
-  reviews: require("./_handlers/reviews"),
-  shipping: require("./_handlers/shipping"),
-  support: require("./_handlers/support"),
-  mercadoPagoWebhook: require("./_handlers/webhooks/mercadopago")
+  adminCatalog: require("../server/_handlers/admin/catalog"),
+  adminDashboard: require("../server/_handlers/admin/dashboard"),
+  adminOrder: require("../server/_handlers/admin/orders/[id]"),
+  adminProducts: require("../server/_handlers/admin/products"),
+  adminReviews: require("../server/_handlers/admin/reviews"),
+  adminSupport: require("../server/_handlers/admin/support"),
+  adminSupportItem: require("../server/_handlers/admin/support/[id]"),
+  authConfig: require("../server/_handlers/auth/config"),
+  expireOrders: require("../server/_handlers/cron/expire-orders"),
+  createOrder: require("../server/_handlers/orders"),
+  getOrder: require("../server/_handlers/orders/[id]"),
+  lookupOrders: require("../server/_handlers/orders/lookup"),
+  products: require("../server/_handlers/products"),
+  reviews: require("../server/_handlers/reviews"),
+  shipping: require("../server/_handlers/shipping"),
+  support: require("../server/_handlers/support"),
+  mercadoPagoWebhook: require("../server/_handlers/webhooks/mercadopago")
 };
 
 function routePath(req) {
