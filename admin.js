@@ -334,6 +334,56 @@ shippingForm.addEventListener("submit", async (event) => {
   finally { button.disabled = false; }
 });
 
+
+async function loadReviews() {
+  const box=document.querySelector("#admin-reviews"); if(!box)return;
+  try {
+    const rows=await api("/api/admin/reviews");
+    const filter=document.querySelector("#reviews-filter");
+    const visible=rows.filter(r=>filter?.value==="all"||r.status===(filter?.value||"pending"));
+    document.querySelector("#reviews-count").textContent=`${rows.length} AVALIAÇÕES`;
+    box.replaceChildren();
+    if(!visible.length){box.append(element("p","Nenhuma avaliação neste filtro."));return;}
+    visible.forEach(r=>{
+      const card=element("article",undefined,"moderation-card");
+      const head=element("div",undefined,"moderation-head");
+      head.append(element("strong",`${r.product_name} · ${"★".repeat(r.rating)}${"☆".repeat(5-r.rating)}`),element("span",({pending:"Aguardando",approved:"Aprovada",rejected:"Rejeitada"})[r.status]||r.status,"moderation-status"));
+      const meta=element("small",`${r.customer_name} · ${r.email} · ${new Date(r.created_at).toLocaleString("pt-BR")}`);
+      const comment=element("p",r.comment);
+      const flag=r.spam_flag?element("strong",`⚠ ${r.spam_flag}`,"spam-flag"):null;
+      const actions=element("div",undefined,"moderation-actions");
+      const action=(label,status,cls)=>{const b=element("button",label,`admin-action ${cls||""}`);b.type="button";b.addEventListener("click",async()=>{try{await api(`/api/admin/reviews?id=${r.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});await loadReviews();}catch(e){setMessage(document.querySelector("#reviews-feedback"),e.message,true);}});actions.append(b);};
+      if(r.status!=="approved")action("Aprovar","approved");
+      if(r.status!=="rejected")action("Rejeitar","rejected","delete-action");
+      const del=element("button","Excluir","admin-action delete-action");del.type="button";del.addEventListener("click",async()=>{if(!confirm("Excluir permanentemente esta avaliação?"))return;try{await api(`/api/admin/reviews?id=${r.id}`,{method:"DELETE"});await loadReviews();}catch(e){setMessage(document.querySelector("#reviews-feedback"),e.message,true);}});actions.append(del);
+      card.append(head,meta);if(flag)card.append(flag);card.append(comment,actions);box.append(card);
+    });
+  } catch(e){setMessage(document.querySelector("#reviews-feedback"),e.message,true);}
+}
+async function loadSupport() {
+ const box=document.querySelector("#admin-support");if(!box)return;
+ try{
+  const rows=await api("/api/admin/support");document.querySelector("#support-count").textContent=`${rows.length} SOLICITAÇÕES`;box.replaceChildren();
+  if(!rows.length){box.append(element("p","Nenhuma solicitação recebida."));return;}
+  rows.forEach(r=>{
+   const card=element("article",undefined,"moderation-card");const head=element("div",undefined,"moderation-head");
+   head.append(element("strong",`${r.reason} · Protocolo ${r.public_code}`),element("span",({open:"Aberta",in_review:"Em análise",resolved:"Resolvida",rejected:"Rejeitada"})[r.status]||r.status,"moderation-status"));
+   const details=element("p",`${r.customer_name} · ${r.email} · ${r.phone}\nPedido: ${r.order_code} · Compra: ${new Date(`${r.purchase_date}T12:00:00`).toLocaleDateString("pt-BR")}`);
+   const comment=element("p",r.comment);const photos=element("div",undefined,"admin-attachments");
+   (r.photo_urls||[]).forEach(url=>{const a=document.createElement("a");a.href=url;a.target="_blank";a.rel="noopener";a.textContent="Abrir foto";photos.append(a);});
+   const actions=element("div",undefined,"moderation-actions");
+   const select=document.createElement("select");select.className="admin-status-select";[["open","Aberta"],["in_review","Em análise"],["resolved","Resolvida"],["rejected","Rejeitada"]].forEach(([v,l])=>select.add(new Option(l,v)));select.value=r.status;
+   const save=element("button","Atualizar status","admin-action");save.type="button";save.addEventListener("click",async()=>{try{await api(`/api/admin/support/${r.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:select.value})});await loadSupport();}catch(e){setMessage(document.querySelector("#support-admin-feedback"),e.message,true);}});
+   actions.append(select,save);
+   const del=element("button","Excluir solicitação","admin-action delete-action");del.type="button";del.disabled=r.status!=="resolved";del.title=del.disabled?"Marque como resolvida antes de excluir.":"Excluir definitivamente e apagar anexos";
+   del.addEventListener("click",async()=>{if(!confirm("Excluir esta solicitação e suas fotos permanentemente? Esta ação não pode ser desfeita."))return;try{await api(`/api/admin/support/${r.id}`,{method:"DELETE"});await loadSupport();}catch(e){setMessage(document.querySelector("#support-admin-feedback"),e.message,true);}});
+   actions.append(del);card.append(head,details,comment,photos,actions);box.append(card);
+  });
+ }catch(e){setMessage(document.querySelector("#support-admin-feedback"),e.message,true);}
+}
+
+document.querySelector("#reviews-filter")?.addEventListener("change", loadReviews);
+
 async function loadDashboard() {
   const data = await api("/api/admin/dashboard");
   document.querySelector("#stat-products").textContent = String(data.stats.product_count);
@@ -349,6 +399,7 @@ async function loadDashboard() {
   renderCategories(data.categories_error);
   renderOrders(data.orders);
   renderShipping(data.shipping, data.shipping_error);
+  await Promise.all([loadReviews(), loadSupport()]);
 }
 
 async function tryLogin(email, password) {
@@ -647,7 +698,7 @@ categoryForm.addEventListener("submit", async (event) => {
 });
 
 // ---------- Abas do painel ----------
-const TABS = ["produtos", "categorias", "frete", "pedidos"];
+const TABS = ["produtos", "categorias", "frete", "pedidos", "avaliacoes", "atendimento"];
 const tabButtons = [...document.querySelectorAll(".admin-tab")];
 function showTab(name, { updateHash = true } = {}) {
   if (!TABS.includes(name)) name = "produtos";

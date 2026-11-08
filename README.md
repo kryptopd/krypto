@@ -139,3 +139,19 @@ O painel `/admin.html` autentica por e-mail e senha usando Supabase Auth. Para c
 - `ADMIN_EMAILS`: lista separada por vírgulas dos e-mails que podem administrar a loja, por exemplo `voce@exemplo.com`. O endereço deve ser o mesmo da conta em **Supabase → Authentication → Users**.
 
 Depois de salvar as variáveis, faça novo deploy na Vercel. Usuários cadastrados no Supabase Auth só entram no painel se o e-mail também estiver listado em `ADMIN_EMAILS`. Se mudar o e-mail autorizado, atualize essa variável e redeploy. A chave `SUPABASE_ANON_KEY` não concede privilégios administrativos por si só; todas as APIs administrativas validam o token no servidor e verificam a lista permitida.
+
+
+## Avaliações moderadas e central de atendimento (novo)
+
+- `avaliacoes.html`: cliente envia nome, e-mail, produto, nota de 1 a 5 estrelas e comentário. A confirmação informa que foi recebido, mas não publicado.
+- `GET /api/reviews`: exibe somente avaliações com status `approved`.
+- `POST /api/reviews`: valida campos, usa honeypot e limitação simples de envio por IP; novos registros entram como `pending`.
+- Painel > **Avaliações**: administrador pode aprovar, rejeitar ou excluir. Comentários pendentes/rejeitados nunca aparecem na vitrine.
+- `atendimento.html`: formulário de troca, devolução, reembolso ou outro atendimento. Solicita os dados usados na compra, código do pedido, data, motivo, descrição e até 3 fotos JPG/PNG/WEBP (900 KB por foto).
+- O servidor valida código público, e-mail e telefone contra o pedido existente. Fotos ficam em bucket privado `support-attachments`; o painel gera links assinados temporários.
+- Painel > **Atendimento**: altera status para aberta, em análise, resolvida ou rejeitada. A exclusão fica bloqueada até status `resolved`; ao excluir, os anexos são removidos do Storage.
+- Hero: palavras genéricas rotativas com animação glitch e fotos de produtos ativos cadastrados no catálogo, alternadas com a imagem de campanha original.
+- **Migração obrigatória:** execute `supabase/migrations/20261108_reviews_support.sql` no SQL Editor do Supabase antes de publicar essas funcionalidades.
+
+### Observações de segurança
+A moderação humana é a barreira final antes da publicação. Honeypot e cooldown em memória são filtros básicos, não substituem CAPTCHA/Turnstile nem rate limiting persistente (Redis/Upstash) em produção com tráfego alto. O bucket de anexos é privado e a API administrativa exige autenticação. O código do pedido, e-mail e telefone são conferidos antes de aceitar uma solicitação. Não armazene dados de cartão nem peça números completos de cartão nos formulários.
