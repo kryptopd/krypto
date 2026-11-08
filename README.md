@@ -1,5 +1,28 @@
 # KRYPTO — loja virtual (Vercel + Supabase + PIX + Mercado Pago)
 
+
+## Melhorias recentes da vitrine
+
+- Filtros combináveis por categoria, preço máximo, disponibilidade e favoritos.
+- Lista de favoritos persistida neste navegador.
+- Visualização rápida do produto com galeria, descrição, tamanhos e estoque.
+- Seção de peças vistas recentemente, persistida neste navegador.
+- Indicador de progresso para frete grátis no carrinho quando houver valor mínimo configurado.
+- Rodapé reorganizado com navegação, ajuda e páginas legais.
+- Pagamentos exibidos dinamicamente conforme as credenciais reais configuradas no servidor.
+
+Favoritos, histórico de visualização e carrinho são locais ao navegador; ainda não são sincronizados entre dispositivos ou contas.
+
+## Fotos enviadas pelo painel, tamanhos M/G/GG/G1 e categorias (novo)
+
+- **Fotos sem URL:** em *Produtos*, o admin escolhe até **4 fotos** do celular/computador. A página reduz cada foto (máx. 1400 px, JPEG) e envia para o **Supabase Storage** (pasta pública `product-images`, criada sozinha no primeiro envio se não existir). A primeira foto é a capa (usada na sacola e no checkout); dá para reordenar com ◀ ▶ e remover. Fotos retiradas de um produto são apagadas do Storage ao salvar.
+- **Vitrine:** cada peça mostra todas as fotos (arrastar no celular, setas e bolinhas no computador).
+- **Tamanhos:** botões **M, G, GG, G1** (nenhum marcado = tamanho único, ex.: acessórios). A API só aceita esses quatro. Produtos antigos com outros tamanhos (ex.: P) continuam vendendo até serem editados.
+- **Etiqueta:** campo removido (do painel, da API e da vitrine). A coluna `tag` continua no banco, sem uso.
+- **Categorias:** nova aba **Categorias** no painel (criar e apagar). Cada peça escolhe uma categoria no cadastro (ou "Sem categoria"). Apagar uma categoria **não** apaga as peças: elas ficam sem categoria. A vitrine mostra como filtro só as categorias que têm peça.
+- **Limite de funções da Vercel (plano gratuito = 12):** produtos, categorias e envio de fotos foram juntados em **uma** função, `api/admin/catalog.js` (`?r=products|categories|upload`), e a lista pública de categorias é `GET /api/products?categories=1`. Os arquivos `api/admin/products.js` e `api/admin/products/[id].js` foram removidos; o projeto passou de 12 para 11 funções.
+- **Migração obrigatória:** execute `supabase/migrations/20261107_photos_sizes_categories.sql` no SQL Editor (cria `images`, a tabela `categories`, libera categorias novas e cria a pasta de fotos). Sem ela o painel abre, mas avisa e recusa salvar produtos; a vitrine segue funcionando com a foto única.
+
 ## Compra sem cadastro, "Meus pedidos" e PIX com valor preenchido (novo)
 
 - **Sem conta de cliente:** o cliente não cria mais login no Supabase Auth, então não consome o limite de usuários. O checkout pede nome, e-mail, telefone e endereço; esses dados vão só no pedido (uma linha na tabela `orders`, apenas de quem realmente compra). O Supabase Auth continua sendo usado **somente pelo admin**.
@@ -12,10 +35,10 @@
 
 ## Pagamento por PIX
 
-O checkout oferece **PIX** (padrão) e, se `MERCADOPAGO_ACCESS_TOKEN` estiver configurado, também **cartão/outros via Mercado Pago**.
+O checkout oferece **PIX** quando `PIX_KEY` estiver configurada e, se `MERCADOPAGO_ACCESS_TOKEN` estiver configurado, também **cartão/outros via Mercado Pago**. Os meios indisponíveis são ocultados automaticamente.
 
 - Depois de confirmar o pedido, o cliente vai para `pedido.html`, que mostra o valor exato, a chave PIX com botão de copiar e o passo a passo. A página se atualiza sozinha.
-- A chave padrão está em `api/_lib/supabase.js` (`DEFAULT_PIX_KEY`). Para trocar sem mexer no código, defina `PIX_KEY` na Vercel.
+- Configure `PIX_KEY` nas variáveis de ambiente da Vercel com a chave PIX real da empresa. A loja não usa mais uma chave padrão embutida no código; sem `PIX_KEY`, PIX fica indisponível no checkout.
 - Como a chave PIX é estática, **não há confirmação automática**: confira o valor no app do banco e clique em **Confirmar PIX** no painel (`admin.html`) no pedido correspondente. Só depois o pedido pode ser preparado/enviado.
 - Pedidos PIX sem pagamento mantêm o estoque reservado por **24 horas** (Mercado Pago continua em 30 minutos). Para mudar, edite `expire_krypto_orders` em `supabase/migrations/20261105_pix.sql`.
 - **Obrigatório antes de publicar esta versão:** execute `supabase/migrations/20261105_pix.sql` no SQL Editor do Supabase. Sem ela, pedidos PIX são recusados com uma mensagem amigável.
@@ -26,7 +49,7 @@ Este projeto implementa catálogo, checkout com criação de pedido, estoque res
 
 ### 1. Banco de dados
 - Em um projeto Supabase novo, execute `supabase/schema.sql` no SQL Editor.
-- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql`, `20261105_pix.sql` e `20261106_shipping_cart_accounts.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
+- Se o banco já existe, faça backup e execute `supabase/migrations/20261029_commerce_lgpd.sql`, `20261105_pix.sql`, `20261106_shipping_cart_accounts.sql` e `20261107_photos_sizes_categories.sql` no SQL Editor. A migração adiciona campos e funções, mas revise os dados atuais antes de aplicar em produção.
 - Não exponha `SUPABASE_SERVICE_ROLE_KEY` no navegador.
 
 ### 2. Variáveis de ambiente da Vercel
@@ -37,7 +60,7 @@ Configure em Project Settings → Environment Variables, em todos os ambientes q
 - `MERCADOPAGO_ACCESS_TOKEN`: Access Token da aplicação Mercado Pago. Comece com credenciais de teste; use produção só depois de validar o fluxo.
 - `MERCADOPAGO_WEBHOOK_SECRET`: chave secreta gerada nas configurações de Webhooks do Mercado Pago.
 - `SITE_URL`: domínio HTTPS canônico da loja, sem barra no final (ex.: `https://sua-loja.vercel.app`).
-- `PIX_KEY` (opcional): chave PIX que recebe os pagamentos; se omitida, usa a chave padrão do código.
+- `PIX_KEY` (obrigatória para aceitar PIX): chave PIX real que recebe os pagamentos. Sem ela, o PIX é ocultado no checkout.
 - `CRON_SECRET`: segredo aleatório para proteger a função de expiração de pedidos.
 - `SUPABASE_ANON_KEY`: chave publicável/anon para o formulário de login do Supabase Auth.
 - `ADMIN_EMAILS`: e-mail(s) autorizado(s) a administrar a loja, separados por vírgula (ex.: `voce@exemplo.com`). Precisa corresponder ao e-mail cadastrado em Supabase → Authentication → Users.
@@ -92,7 +115,8 @@ A implementação de autenticação foi mantida sem alterações neste pacote, c
 - `GET /api/orders/:id` (retorna status e valores, sem dados pessoais)
 - `POST /api/webhooks/mercadopago`
 - `GET /api/cron/expire-orders` (protegida por `CRON_SECRET`)
-- Rotas administrativas já existentes para produtos e pedidos.
+- `GET /api/products?categories=1` (categorias da loja)
+- Rotas administrativas: `/api/admin/catalog` (produtos, categorias e fotos), `/api/admin/dashboard` e `/api/admin/orders/:id`.
 
 ### 8. Testes obrigatórios antes de produção
 - Compra com pagamento aprovado/recusado/pendente.

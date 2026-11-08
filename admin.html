@@ -47,9 +47,72 @@
     <section class="admin-stats" aria-label="Resumo da loja">
       <article class="stat-card"><span>PRODUTOS NO CATÁLOGO</span><strong id="stat-products">0</strong><small>Peças cadastradas</small></article>
       <article class="stat-card"><span>PEDIDOS RECEBIDOS</span><strong id="stat-orders">0</strong><small><i class="status-dot"></i> <span id="stat-pending">0 aguardando</span></small></article>
-      <article class="stat-card"><span>VENDAS DO DROP</span><strong id="stat-sales">R$ 0,00</strong><small>Pedidos não cancelados</small></article>
+      <article class="stat-card"><span>VENDAS CONFIRMADAS</span><strong id="stat-sales">R$ 0,00</strong><small>Pagamentos aprovados</small></article>
+      <article class="stat-card"><span>ESTOQUE DISPONÍVEL</span><strong id="stat-stock">0</strong><small id="stat-stock-note">Unidades cadastradas</small></article>
+      <article class="stat-card"><span>ATENÇÃO NO ESTOQUE</span><strong id="stat-low-stock">0</strong><small id="stat-out-stock">0 esgotados</small></article>
+      <article class="stat-card"><span>TICKET MÉDIO</span><strong id="stat-ticket">R$ 0,00</strong><small>Pedidos pagos</small></article>
     </section>
 
+    <nav class="admin-tabs" role="tablist" aria-label="Seções do painel">
+      <button class="admin-tab" role="tab" type="button" id="tab-produtos" aria-controls="panel-produtos" data-tab="produtos">Produtos</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-categorias" aria-controls="panel-categorias" data-tab="categorias">Categorias</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-frete" aria-controls="panel-frete" data-tab="frete">Frete</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-pedidos" aria-controls="panel-pedidos" data-tab="pedidos">Pedidos</button>
+    </nav>
+
+    <div class="admin-tab-panel" role="tabpanel" id="panel-produtos" aria-labelledby="tab-produtos" data-panel="produtos" hidden>
+    <section class="admin-panel product-editor-panel" id="produtos">
+      <div class="panel-heading"><div><span class="panel-kicker">CATÁLOGO</span><h2>Cadastrar produto</h2><p class="panel-description">Preencha os detalhes da peça para incluir no catálogo.</p></div><span class="panel-count">NOVO ITEM</span></div>
+      <form class="product-editor">
+        <div class="editor-fields">
+          <label class="field">Nome do produto<input type="text" name="produto" placeholder="Ex.: Camiseta Essential" required></label>
+          <label class="field">Categoria<select name="categoria"><option value="">Sem categoria</option></select><small class="field-help">Crie novas na aba <a href="#categorias" class="inline-link">Categorias</a>.</small></label>
+          <label class="field">Preço (R$)<input type="number" name="preco" placeholder="0,00" min="0.01" step="0.01" required></label>
+          <label class="field">Estoque<input type="number" name="estoque" placeholder="Quantidade disponível" min="0" required></label>
+          <label class="field">Peso (gramas)<input type="number" name="peso" placeholder="Ex.: 300" min="0" max="100000" step="1" value="300" required></label>
+          <fieldset class="field editor-sizes">
+            <legend>Tamanhos disponíveis</legend>
+            <div class="size-options">
+              <label class="size-option"><input type="checkbox" name="tamanho" value="M"><span>M</span></label>
+              <label class="size-option"><input type="checkbox" name="tamanho" value="G"><span>G</span></label>
+              <label class="size-option"><input type="checkbox" name="tamanho" value="GG"><span>GG</span></label>
+              <label class="size-option"><input type="checkbox" name="tamanho" value="G1"><span>G1</span></label>
+            </div>
+            <small class="field-help">Marque os tamanhos que existem. Sem nenhum marcado, a peça é de tamanho único (ex.: acessórios).</small>
+          </fieldset>
+          <div class="field editor-photos">
+            <span class="field-label" id="photos-label">Fotos da peça <small>(de 1 a 4 · a primeira é a capa)</small></span>
+            <div class="photo-slots" id="photo-slots" role="list" aria-labelledby="photos-label"></div>
+            <input type="file" id="photo-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+            <small class="field-help" id="photo-help">Escolha fotos do celular ou do computador. Elas são reduzidas automaticamente antes do envio.</small>
+          </div>
+          <label class="field editor-description">Descrição<textarea name="descricao" rows="3" placeholder="Conte um pouco sobre a peça..."></textarea></label>
+        </div>
+        <div class="editor-footer"><p class="form-note" id="product-feedback" role="status">Produtos cadastrados ficam visíveis na vitrine.</p><div class="editor-actions"><button class="button button-outline" type="reset">Limpar formulário</button><button class="button button-primary" type="submit">Cadastrar produto <span>↗</span></button></div></div>
+      </form>
+    </section>
+
+    <section class="admin-panel product-catalog-panel">
+      <div class="panel-heading"><div><span class="panel-kicker">VISUALIZAÇÃO DO CATÁLOGO</span><h2>Produtos cadastrados</h2><p class="panel-description">Confira fotos, categoria, preço e estoque de cada item.</p></div><span class="panel-count" id="catalog-count">0 ITENS</span></div>
+      <div class="admin-products-grid" id="admin-products-grid"></div>
+    </section>
+
+    </div>
+
+    <div class="admin-tab-panel" role="tabpanel" id="panel-categorias" aria-labelledby="tab-categorias" data-panel="categorias" hidden>
+    <section class="admin-panel categories-panel" id="categorias">
+      <div class="panel-heading"><div><span class="panel-kicker">ORGANIZAÇÃO</span><h2>Categorias</h2><p class="panel-description">Crie as categorias da loja e escolha uma para cada peça no cadastro. Elas viram os filtros da vitrine.</p></div><span class="panel-count" id="categories-count">0 CATEGORIAS</span></div>
+      <p class="shipping-banner" id="categories-banner" hidden></p>
+      <form class="category-form" id="category-form" novalidate>
+        <label class="field">Nova categoria<input type="text" name="nome" maxlength="40" placeholder="Ex.: Bonés" autocomplete="off" required></label>
+        <button class="button button-primary" type="submit">Criar categoria <span>↗</span></button>
+      </form>
+      <p class="form-note" id="category-feedback" role="status" aria-live="polite"></p>
+      <ul class="category-list" id="category-list"></ul>
+    </section>
+    </div>
+
+    <div class="admin-tab-panel" role="tabpanel" id="panel-frete" aria-labelledby="tab-frete" data-panel="frete" hidden>
     <section class="admin-panel shipping-panel" id="frete">
       <div class="panel-heading"><div><span class="panel-kicker">FRETE E ENTREGA</span><h2>Cálculo do frete</h2><p class="panel-description">Defina o valor por estado, o peso e quando o frete é grátis. O cálculo é feito no servidor, o cliente não consegue alterá-lo.</p></div><span class="panel-count" id="shipping-status">CARREGANDO</span></div>
       <p class="shipping-banner" id="shipping-banner" hidden></p>
@@ -95,29 +158,9 @@
       </form>
     </section>
 
-    <section class="admin-panel product-editor-panel" id="produtos">
-      <div class="panel-heading"><div><span class="panel-kicker">CATÁLOGO</span><h2>Cadastrar produto</h2><p class="panel-description">Preencha os detalhes da peça para incluir no catálogo.</p></div><span class="panel-count">NOVO ITEM</span></div>
-      <form class="product-editor">
-        <div class="editor-fields">
-          <label class="field">Nome do produto<input type="text" name="produto" placeholder="Ex.: Camiseta Essential" required></label>
-          <label class="field">Categoria<select name="categoria" required><option value="">Selecione uma categoria</option><option>Camisetas</option><option>Moletons</option><option>Acessórios</option></select></label>
-          <label class="field">Preço (R$)<input type="number" name="preco" placeholder="0,00" min="0.01" step="0.01" required></label>
-          <label class="field">Estoque<input type="number" name="estoque" placeholder="Quantidade disponível" min="0" required></label>
-          <label class="field">Peso (gramas)<input type="number" name="peso" placeholder="Ex.: 300" min="0" max="100000" step="1" value="300" required></label>
-          <label class="field">Tamanhos<input type="text" name="tamanhos" placeholder="Ex.: P, M, G, GG"></label>
-          <label class="field">Etiqueta<input type="text" name="tag" placeholder="Ex.: NOVO"></label>
-          <label class="field">URL da imagem<input type="url" name="imagem" placeholder="https://..." required></label>
-          <label class="field editor-description">Descrição<textarea name="descricao" rows="3" placeholder="Conte um pouco sobre a peça..."></textarea></label>
-        </div>
-        <div class="editor-footer"><p class="form-note" id="product-feedback" role="status">Produtos cadastrados ficam visíveis na vitrine.</p><div class="editor-actions"><button class="button button-outline" type="reset">Limpar formulário</button><button class="button button-primary" type="submit">Cadastrar produto <span>↗</span></button></div></div>
-      </form>
-    </section>
+    </div>
 
-    <section class="admin-panel product-catalog-panel">
-      <div class="panel-heading"><div><span class="panel-kicker">VISUALIZAÇÃO DO CATÁLOGO</span><h2>Produtos cadastrados</h2><p class="panel-description">Confira fotos, categoria, preço e estoque de cada item.</p></div><span class="panel-count" id="catalog-count">0 ITENS</span></div>
-      <div class="admin-products-grid" id="admin-products-grid"></div>
-    </section>
-
+    <div class="admin-tab-panel" role="tabpanel" id="panel-pedidos" aria-labelledby="tab-pedidos" data-panel="pedidos" hidden>
     <section class="admin-panel orders-panel">
       <div class="panel-heading"><div><span class="panel-kicker">ACOMPANHAMENTO</span><h2>Pedidos recentes</h2></div><span class="panel-count" id="orders-count">0 PEDIDOS</span></div>
       <p class="privacy-note">Pedidos criados no checkout aparecem aqui. Os dados pessoais só podem ser acessados por este painel autenticado.</p>
@@ -130,7 +173,10 @@
       </div>
     </section>
 
+
     <div class="admin-disclaimer"><span>✳</span> <div><strong>Como confirmar um pagamento PIX:</strong> confira no app do seu banco se entrou o valor exato do pedido (de preferência com o nome do cliente ou o código do pedido) e clique em <strong>Confirmar PIX</strong>. Pedidos pagos pelo Mercado Pago são confirmados automaticamente. Só envie pedidos com pagamento confirmado. Os dados dos clientes são pessoais: use-os só para entregar o pedido.</div></div>
+    </div>
+
   </main>
   <footer class="site-footer admin-footer">
     <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>

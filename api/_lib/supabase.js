@@ -106,18 +106,23 @@ function getSiteUrl(req) {
   }
   return `${proto}://${host}`.replace(/^http:\/\/[^/]+\.vercel\.app/i, `https://${host}`);
 }
-// Chave PIX (chave aleatória) que recebe os pagamentos. Pode ser trocada pela variável PIX_KEY na Vercel.
-const DEFAULT_PIX_KEY = "4f5415bf-b519-4df0-a504-c9bc73de4699";
+// A chave PIX é dado operacional da loja: nunca use uma chave fictícia embutida no código.
 function pixConfig() {
+  const pixKey = String(process.env.PIX_KEY || "").trim();
+  if (!pixKey) {
+    const error = new Error("O pagamento por PIX ainda não está configurado. Escolha outro meio de pagamento ou tente mais tarde.");
+    error.statusCode = 503;
+    throw error;
+  }
   return {
     merchant_name: String(process.env.PIX_MERCHANT_NAME || "KRYPTO").trim(),
     merchant_city: String(process.env.PIX_MERCHANT_CITY || "BRASIL").trim(),
-    pix_key: String(process.env.PIX_KEY || DEFAULT_PIX_KEY).trim(),
+    pix_key: pixKey,
     // Quanto tempo o estoque fica reservado para um pedido PIX aguardando pagamento (definido no SQL).
     pix_reserve_hours: 24
   };
 }
 function paymentMethods() {
-  return { pix: true, mercadopago: Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN) };
+  return { pix: Boolean(String(process.env.PIX_KEY || "").trim()), mercadopago: Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN) };
 }
 module.exports = { getSupabase, sendError, requireMethod, requireAdmin, requireUser, getSiteUrl, pixConfig, paymentMethods };

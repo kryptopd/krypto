@@ -11,6 +11,9 @@ const paymentLabels = { pending: "Pendente", approved: "Pago", rejected: "Recusa
 let authorization = "";
 let supabaseAuth = null;
 let editingProductId = null;
+let categories = [], lastProducts = [], photos = [];   // photos: [{ id, url, preview, pending }]
+const SIZE_ORDER = ["M", "G", "GG", "G1"], MAX_PHOTOS = 4;
+const CATALOG_API = "/api/admin/catalog";
 
 const money = (cents) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -43,7 +46,10 @@ function element(tag, text, className) {
   return node;
 }
 
+function coverOf(product) { return (product.images && product.images[0]) || product.image_url; }
+
 function renderProducts(products) {
+  lastProducts = products;
   productGrid.replaceChildren();
   document.querySelector("#catalog-count").textContent = `${products.length} ITENS`;
 
@@ -55,17 +61,18 @@ function renderProducts(products) {
   products.forEach((product) => {
     const card = element("article", undefined, "admin-product-card");
     const photo = element("div", undefined, "admin-product-photo");
-    photo.style.backgroundImage = `url("${product.image_url}")`;
-    if (product.tag) photo.append(element("span", product.tag, "product-tag"));
+    photo.style.backgroundImage = `url("${coverOf(product)}")`;
+    const photoCount = (product.images && product.images.length) || 1;
+    if (photoCount > 1) photo.append(element("span", `${photoCount} fotos`, "product-tag admin-photo-count"));
     const stockClass = product.stock > 5 ? "stock-ok" : "stock-low";
     photo.append(element("span", `${product.stock} disponíveis`, `admin-stock ${stockClass}`));
 
     const details = element("div", undefined, "admin-product-details");
     details.append(
-      element("span", product.category.toUpperCase(), "admin-product-category"),
+      element("span", (product.category || "Sem categoria").toUpperCase(), "admin-product-category"),
       element("h3", product.name),
       element("p", product.description || "Sem descrição"),
-      element("small", `Peso: ${product.weight_grams ?? 300} g`, "admin-product-weight"),
+      element("small", `Tamanhos: ${product.sizes && product.sizes.length ? product.sizes.join(", ") : "único"} · Peso: ${product.weight_grams ?? 300} g`, "admin-product-weight"),
     );
     const bottom = element("div", undefined, "admin-product-bottom");
     bottom.append(element("strong", money(product.price_cents)));
@@ -333,7 +340,13 @@ async function loadDashboard() {
   document.querySelector("#stat-orders").textContent = String(data.stats.order_count);
   document.querySelector("#stat-pending").textContent = `${data.stats.pending_count} aguardando`;
   document.querySelector("#stat-sales").textContent = money(data.stats.sales_cents);
-  renderProducts(data.products);
+  document.querySelector("#stat-stock").textContent = String(data.stats.units_in_stock || 0);
+  document.querySelector("#stat-low-stock").textContent = String(data.stats.low_stock_count || 0);
+  document.querySelector("#stat-out-stock").textContent = `${data.stats.out_of_stock_count || 0} esgotados`;
+  document.querySelector("#stat-ticket").textContent = money(data.stats.average_ticket_cents || 0);
+  categories = data.categories || [];
+  renderProducts(data.products.filter((p) => p.active));   // "Excluir" só tira da vitrine; some também da lista do painel
+  renderCategories(data.categories_error);
   renderOrders(data.orders);
   renderShipping(data.shipping, data.shipping_error);
 }
@@ -392,15 +405,18 @@ async function initializeAuth() {
 function editProduct(product) {
   editingProductId = product.id;
   productForm.elements.produto.value = product.name;
-  productForm.elements.categoria.value = product.category;
+  fillCategorySelect(product.category || "");
   productForm.elements.preco.value = (product.price_cents / 100).toFixed(2);
   productForm.elements.estoque.value = product.stock;
   productForm.elements.peso.value = product.weight_grams ?? 300;
-  productForm.elements.tamanhos.value = product.sizes.join(", ");
-  productForm.elements.imagem.value = product.image_url;
+  const chosen = new Set(product.sizes || []);
+  productForm.querySelectorAll('input[name="tamanho"]').forEach((box) => { box.checked = chosen.has(box.value); });
+  const urls = (product.images && product.images.length ? product.images : [product.image_url]).filter(Boolean).slice(0, MAX_PHOTOS);
+  photos = urls.map((url) => ({ id: nextPhotoId(), url, preview: url, pending: false }));
+  renderPhotoSlots();
   productForm.elements.descricao.value = product.description;
-  productForm.elements.tag.value = product.tag;
   productForm.querySelector('[type="submit"]').innerHTML = "Salvar alterações <span>↗</span>";
+  showTab("produtos");
   document.querySelector("#produtos").scrollIntoView({ behavior: "smooth" });
   setMessage(productFeedback, `Editando ${product.name}.`);
 }
@@ -408,7 +424,7 @@ function editProduct(product) {
 async function deleteProduct(product) {
   if (!window.confirm(`Excluir "${product.name}" do catálogo?`)) return;
   try {
-    await api(`/api/admin/products/${product.id}`, { method: "DELETE" });
+    await api(`${CATALOG_API}?r=products&id=${product.id}`, { method: "DELETE" });
     await loadDashboard();
   } catch (error) {
     setMessage(productFeedback, error.message, true);
@@ -423,6 +439,8 @@ loginForm.addEventListener("submit", async (event) => {
 
 productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (photos.some((p) => p.pending)) return setMessage(productFeedback, "Aguarde o envio das fotos terminar.", true);
+  if (!photos.length) return setMessage(productFeedback, "Adicione ao menos uma foto da peça.", true);
   const form = new FormData(productForm);
   const payload = {
     name: form.get("produto"),
@@ -430,9 +448,8 @@ productForm.addEventListener("submit", async (event) => {
     price: Number(form.get("preco")),
     stock: Number(form.get("estoque")),
     weight_grams: Number(form.get("peso")),
-    sizes: String(form.get("tamanhos")).split(",").map((size) => size.trim()).filter(Boolean),
-    tag: form.get("tag"),
-    image_url: form.get("imagem"),
+    sizes: form.getAll("tamanho"),
+    images: photos.map((p) => p.url),
     description: form.get("descricao"),
   };
   const button = productForm.querySelector('[type="submit"]');
@@ -440,16 +457,14 @@ productForm.addEventListener("submit", async (event) => {
   setMessage(productFeedback, editingProductId ? "Salvando alterações..." : "Cadastrando produto...");
   try {
     await api(
-      editingProductId ? `/api/admin/products/${editingProductId}` : "/api/admin/products",
+      editingProductId ? `${CATALOG_API}?r=products&id=${editingProductId}` : `${CATALOG_API}?r=products`,
       {
         method: editingProductId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       },
     );
-    productForm.reset();
-    editingProductId = null;
-    button.innerHTML = "Cadastrar produto <span>↗</span>";
+    productForm.reset();   // o evento "reset" limpa fotos e modo de edição
     setMessage(productFeedback, "Produto salvo com sucesso.");
     await loadDashboard();
   } catch (error) {
@@ -459,13 +474,202 @@ productForm.addEventListener("submit", async (event) => {
   }
 });
 
+// "Limpar formulário" (e depois de salvar): volta ao modo de cadastro e esvazia as fotos.
 productForm.addEventListener("reset", () => {
   editingProductId = null;
-  setTimeout(() => { productForm.elements.peso.value = 300; }, 0);
-  const button = productForm.querySelector('[type="submit"]');
-  button.innerHTML = "Cadastrar produto <span>↗</span>";
+  photos.forEach((p) => { if (p.preview && p.preview.startsWith("blob:")) URL.revokeObjectURL(p.preview); });
+  photos = [];
+  renderPhotoSlots();
+  productForm.querySelector('[type="submit"]').innerHTML = "Cadastrar produto <span>↗</span>";
+  setTimeout(() => { fillCategorySelect(""); productForm.elements.peso.value = 300; }, 0);
   setMessage(productFeedback, "Produtos cadastrados ficam visíveis na vitrine.");
 });
+
+// ---------- Fotos enviadas do aparelho (sem URL) ----------
+const photoSlots = document.querySelector("#photo-slots");
+const photoInput = document.querySelector("#photo-input");
+const photoHelp = document.querySelector("#photo-help");
+const PHOTO_HELP_DEFAULT = photoHelp.textContent;
+let photoSeq = 0;
+const nextPhotoId = () => `p${++photoSeq}`;
+
+function renderPhotoSlots() {
+  photoSlots.replaceChildren();
+  photos.forEach((photo, index) => {
+    const slot = element("div", undefined, `photo-slot${photo.pending ? " pending" : ""}`);
+    slot.setAttribute("role", "listitem");
+    const img = document.createElement("img");
+    img.src = photo.preview || photo.url; img.alt = `Foto ${index + 1}${index === 0 ? " (capa)" : ""}`;
+    slot.append(img);
+    if (index === 0) slot.append(element("span", "Capa", "photo-badge"));
+    if (photo.pending) { slot.append(element("span", "Enviando…", "photo-status")); photoSlots.append(slot); return; }
+    const bar = element("div", undefined, "photo-actions");
+    const mk = (label, aria, handler, disabled) => {
+      const b = element("button", label, "photo-btn"); b.type = "button"; b.setAttribute("aria-label", aria); b.disabled = Boolean(disabled);
+      b.addEventListener("click", handler); return b;
+    };
+    bar.append(
+      mk("◀", `Mover foto ${index + 1} para a esquerda`, () => movePhoto(index, -1), index === 0),
+      mk("▶", `Mover foto ${index + 1} para a direita`, () => movePhoto(index, 1), index === photos.length - 1),
+      mk("Remover", `Remover foto ${index + 1}`, () => removePhoto(photo.id))
+    );
+    slot.append(bar);
+    photoSlots.append(slot);
+  });
+  if (photos.length < MAX_PHOTOS) {
+    const add = element("button", undefined, "photo-add"); add.type = "button";
+    add.append(element("strong", "+ Adicionar foto"), element("small", `${photos.length} de ${MAX_PHOTOS}`));
+    add.addEventListener("click", () => photoInput.click());
+    photoSlots.append(add);
+  }
+}
+function movePhoto(index, delta) {
+  const target = index + delta;
+  if (target < 0 || target >= photos.length) return;
+  [photos[index], photos[target]] = [photos[target], photos[index]];
+  renderPhotoSlots();
+}
+function removePhoto(id) {
+  const gone = photos.find((p) => p.id === id);
+  if (gone && gone.preview && gone.preview.startsWith("blob:")) URL.revokeObjectURL(gone.preview);
+  photos = photos.filter((p) => p.id !== id);
+  renderPhotoSlots();
+}
+
+// Lê a foto, reduz para no máximo 1400 px e converte em JPEG leve (cabe no limite de envio e carrega rápido na loja).
+async function compressPhoto(file) {
+  let bitmap;
+  try { bitmap = await createImageBitmap(file); }
+  catch (_) {
+    bitmap = await new Promise((resolve, reject) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Não foi possível ler essa foto. Use JPG, PNG ou WebP.")); };
+      img.src = url;
+    });
+  }
+  const width = bitmap.width || bitmap.naturalWidth, height = bitmap.height || bitmap.naturalHeight;
+  const scale = Math.min(1, 1400 / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale)); canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);   // PNG com fundo transparente vira fundo branco
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  if (bitmap.close) bitmap.close();
+  let quality = 0.85, dataUrl = canvas.toDataURL("image/jpeg", quality);
+  while (dataUrl.length > 2400000 && quality > 0.5) { quality -= 0.1; dataUrl = canvas.toDataURL("image/jpeg", quality); }
+  if (dataUrl.length > 2400000) throw new Error("A foto ficou grande demais. Tente outra.");
+  return dataUrl;
+}
+
+async function uploadFile(file) {
+  const photo = { id: nextPhotoId(), url: "", preview: URL.createObjectURL(file), pending: true };
+  photos.push(photo); renderPhotoSlots();
+  try {
+    const data = await compressPhoto(file);
+    const saved = await api(`${CATALOG_API}?r=upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
+    photo.url = saved.url; photo.pending = false;
+  } catch (error) {
+    photos = photos.filter((p) => p.id !== photo.id);
+    URL.revokeObjectURL(photo.preview);
+    setMessage(photoHelp, `${file.name}: ${error.message}`, true);
+  }
+  renderPhotoSlots();
+}
+
+photoInput.addEventListener("change", async () => {
+  const files = [...photoInput.files].filter((f) => /^image\//.test(f.type));
+  photoInput.value = "";
+  if (!files.length) return;
+  setMessage(photoHelp, PHOTO_HELP_DEFAULT);
+  const room = MAX_PHOTOS - photos.length;
+  if (files.length > room) setMessage(photoHelp, room > 0 ? `Cabem só ${MAX_PHOTOS} fotos por peça: usei as ${room} primeiras.` : `Já são ${MAX_PHOTOS} fotos. Remova uma para trocar.`, true);
+  await Promise.all(files.slice(0, Math.max(0, room)).map(uploadFile));
+});
+renderPhotoSlots();
+
+// ---------- Categorias ----------
+const categoryForm = document.querySelector("#category-form");
+const categoryList = document.querySelector("#category-list");
+const categoryFeedback = document.querySelector("#category-feedback");
+
+function fillCategorySelect(selected) {
+  const select = productForm.elements.categoria;
+  const keep = selected !== undefined ? selected : select.value;
+  select.replaceChildren(new Option("Sem categoria", ""));
+  categories.forEach((c) => select.append(new Option(c.name, c.name)));
+  select.value = categories.some((c) => c.name === keep) ? keep : "";
+}
+
+function renderCategories(error) {
+  const banner = document.querySelector("#categories-banner");
+  banner.hidden = !error; banner.dataset.tone = "warn"; banner.textContent = error || "";
+  document.querySelector("#categories-count").textContent = `${categories.length} ${categories.length === 1 ? "CATEGORIA" : "CATEGORIAS"}`;
+  categoryList.replaceChildren();
+  if (!categories.length && !error) categoryList.append(element("li", "Nenhuma categoria ainda. Crie a primeira acima.", "category-empty"));
+  categories.forEach((category) => {
+    const used = lastProducts.length ? lastProducts.filter((p) => p.active && p.category === category.name).length : 0;
+    const row = element("li", undefined, "category-item");
+    const label = element("div");
+    label.append(element("strong", category.name), element("small", used ? `${used} ${used === 1 ? "peça" : "peças"}` : "Nenhuma peça"));
+    const remove = element("button", "Apagar", "admin-action delete-action"); remove.type = "button";
+    remove.setAttribute("aria-label", `Apagar a categoria ${category.name}`);
+    remove.addEventListener("click", () => deleteCategory(category, used));
+    row.append(label, remove);
+    categoryList.append(row);
+  });
+  fillCategorySelect();
+}
+
+async function deleteCategory(category, used) {
+  const warn = used ? `\n\n${used} ${used === 1 ? "peça usa" : "peças usam"} essa categoria e vai ficar sem categoria (continua na loja).` : "";
+  if (!window.confirm(`Apagar a categoria "${category.name}"?${warn}`)) return;
+  try {
+    await api(`${CATALOG_API}?r=categories&id=${category.id}`, { method: "DELETE" });
+    setMessage(categoryFeedback, `Categoria "${category.name}" apagada.`);
+    await loadDashboard();
+  } catch (error) { setMessage(categoryFeedback, error.message, true); }
+}
+
+categoryForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = categoryForm.elements.nome, name = input.value.trim();
+  if (!name) return setMessage(categoryFeedback, "Digite o nome da categoria.", true);
+  const button = categoryForm.querySelector('[type="submit"]');
+  button.disabled = true; setMessage(categoryFeedback, "Criando…");
+  try {
+    await api(`${CATALOG_API}?r=categories`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+    input.value = "";
+    setMessage(categoryFeedback, `Categoria "${name}" criada. Já aparece na lista de categorias do cadastro de produto.`);
+    await loadDashboard();
+  } catch (error) { setMessage(categoryFeedback, error.message, true); }
+  finally { button.disabled = false; }
+});
+
+// ---------- Abas do painel ----------
+const TABS = ["produtos", "categorias", "frete", "pedidos"];
+const tabButtons = [...document.querySelectorAll(".admin-tab")];
+function showTab(name, { updateHash = true } = {}) {
+  if (!TABS.includes(name)) name = "produtos";
+  tabButtons.forEach((button) => {
+    const active = button.dataset.tab === name;
+    button.setAttribute("aria-selected", String(active)); button.tabIndex = active ? 0 : -1;
+  });
+  document.querySelectorAll(".admin-tab-panel").forEach((panel) => { panel.hidden = panel.dataset.panel !== name; });
+  if (updateHash && location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
+}
+tabButtons.forEach((button, index) => {
+  button.addEventListener("click", () => showTab(button.dataset.tab));
+  button.addEventListener("keydown", (e) => {
+    const move = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!move) return;
+    e.preventDefault();
+    const next = tabButtons[(index + move + tabButtons.length) % tabButtons.length];
+    showTab(next.dataset.tab); next.focus();
+  });
+});
+window.addEventListener("hashchange", () => { const name = location.hash.slice(1); if (TABS.includes(name)) showTab(name, { updateHash: false }); });
+showTab(location.hash.slice(1), { updateHash: false });
 
 document.querySelector("#admin-logout").addEventListener("click", async () => {
   authorization = "";

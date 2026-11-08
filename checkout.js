@@ -234,7 +234,9 @@ fields.cep.addEventListener("input", async () => {
 
 // ---------- Pagamento / botão ----------
 function refreshButton() {
-  submitButton.disabled = submitting;
+  const available = Boolean(info && info.payment_methods && (info.payment_methods.pix || info.payment_methods.mercadopago));
+  submitButton.disabled = submitting || !available;
+  if (!available) { submitButton.textContent = "Pagamento indisponível"; return; }
   if (submitting) return;
   submitButton.innerHTML = paymentMethod() === "pix" ? 'Confirmar e ver chave PIX <span aria-hidden="true">↗</span>' : 'Ir para o pagamento <span aria-hidden="true">↗</span>';
   $("#secure-note-text").textContent = paymentMethod() === "pix"
@@ -299,7 +301,11 @@ form.addEventListener("submit", async (event) => {
     products = list;
     info = infoResponse.ok ? await infoResponse.json() : null;
   } catch (e) { showError("Não foi possível carregar a loja. Atualize a página."); return; }
-  $("#mp-option").hidden = !(info && info.payment_methods && info.payment_methods.mercadopago);
+  const methods = info && info.payment_methods ? info.payment_methods : {};
+  $("#pix-option").hidden = !methods.pix;
+  $("#mp-option").hidden = !methods.mercadopago;
+  if (!methods.pix && methods.mercadopago) form.querySelector('[name="payment_method"][value="mercadopago"]').checked = true;
+  if (!methods.pix && !methods.mercadopago) showError("A loja ainda não configurou uma forma de pagamento. Volte em breve.");
   if (info && !info.configured) showError("A loja ainda não configurou o frete. Volte em breve.");
 
   const stored = K.Profile.read();
