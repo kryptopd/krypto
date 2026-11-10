@@ -10,6 +10,7 @@ const ordersFeedback = document.querySelector("#orders-feedback");
 const paymentLabels = { pending: "Pendente", approved: "Pago", rejected: "Recusado", cancelled: "Cancelado", refunded: "Reembolsado", charged_back: "Contestado", expired: "Expirado" };
 let authorization = "";
 let supabaseAuth = null;
+let authInitError = "";
 let editingProductId = null;
 let categories = [], lastProducts = [], photos = [];   // photos: [{ id, url, preview, pending }]
 const SIZE_ORDER = ["M", "G", "GG", "G1"], MAX_PHOTOS = 4;
@@ -404,7 +405,7 @@ async function loadDashboard() {
 
 async function tryLogin(email, password) {
   if (!supabaseAuth) {
-    setMessage(loginFeedback, "Não foi possível iniciar o login do Supabase. Confira a configuração e recarregue a página.", true);
+    setMessage(loginFeedback, authInitError || "Não foi possível iniciar o login do Supabase. Confira a configuração e recarregue a página.", true);
     return;
   }
   try {
@@ -427,7 +428,8 @@ async function initializeAuth() {
   try {
     if (!window.supabase?.createClient) throw new Error("Biblioteca de autenticação indisponível.");
     const configResponse = await fetch("/api/auth/config", { cache: "no-store" });
-    const config = await configResponse.json();
+    const config = await configResponse.json().catch(() => null);
+    if (!config) throw new Error(`A API não respondeu (/api/auth/config devolveu HTTP ${configResponse.status} sem JSON). A função da Vercel não está sendo encontrada ou falhou no deploy.`);
     if (!configResponse.ok) throw new Error(config.detail || "Configuração do Supabase incompleta.");
     supabaseAuth = window.supabase.createClient(config.url, config.anonKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: "krypto-admin-auth" }
@@ -449,7 +451,9 @@ async function initializeAuth() {
       authorization = sessionNow?.access_token ? `Bearer ${sessionNow.access_token}` : "";
     });
   } catch (error) {
-    setMessage(loginFeedback, error.message || "Erro ao iniciar autenticação.", true);
+    authInitError = error.message || "Erro ao iniciar autenticação.";
+    console.error("[KRYPTO admin] Falha ao iniciar autenticação:", error);
+    setMessage(loginFeedback, authInitError, true);
   }
 }
 
