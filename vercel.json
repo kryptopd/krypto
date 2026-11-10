@@ -4,6 +4,12 @@
       "maxDuration": 15
     }
   },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index?path=:path*"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/expire-orders",
