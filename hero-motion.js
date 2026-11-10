@@ -8,7 +8,7 @@
  fetch("/api/products",{cache:"no-store"}).then(r=>r.ok?r.json():[]).then(products=>{
   photos=products.filter(p=>p.active!==false).flatMap(p=>(Array.isArray(p.images)&&p.images.length?p.images:[p.image_url]).filter(Boolean).map(url=>({url,name:p.name})));
   if(!photos.length)return;
-  const show=()=>{const item=photos[ii%photos.length];image.classList.add("hero-image-changing");setTimeout(()=>{image.style.backgroundImage=`linear-gradient(180deg,rgba(12,10,15,.02) 35%,rgba(12,10,15,.46)),url("${item.url.replace(/["\\]/g,"")} ")`;image.setAttribute("aria-label",`Peça da KRYPTO: ${item.name}`);image.classList.remove("hero-image-changing");ii++;},450);};
+  const show=()=>{const item=photos[ii%photos.length];image.classList.add("hero-image-changing");setTimeout(()=>{image.style.backgroundImage=`linear-gradient(180deg,rgba(12,10,15,.02) 35%,rgba(12,10,15,.46)),url("${item.url.replace(/["\\]/g,"")}")`;image.setAttribute("aria-label",`Peça da KRYPTO: ${item.name}`);image.classList.remove("hero-image-changing");ii++;},450);};
   show();setInterval(show,6200);
  }).catch(()=>{});
 })();
