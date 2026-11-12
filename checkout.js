@@ -1,5 +1,6 @@
 const K = window.Krypto;
-const { money, Cart } = K;
+const { money, Cart, coverFor, lineColorOk, maxQty } = K;
+let pixPercent = 0;
 const $ = (s) => document.querySelector(s);
 const form = $("#customer-form");
 const fields = form.elements;
@@ -27,9 +28,9 @@ const productById = (id) => products.find((p) => p.id === id);
 function lineState() {
   return Cart.lines().map((line) => {
     const product = productById(line.product_id);
-    const unavailable = !product || product.stock < 1;
-    const stockForProduct = product ? product.stock : 0;
-    const qty = unavailable ? line.quantity : Math.min(line.quantity, stockForProduct, 10);
+    const limit = product ? maxQty(product, line) : 0;
+    const unavailable = !product || limit < 1 || !lineColorOk(product, line);
+    const qty = unavailable ? line.quantity : Math.min(line.quantity, limit, 10);
     return { line, product, unavailable, qty };
   });
 }
@@ -45,39 +46,38 @@ function renderItems() {
   let qtyTotal = 0, subtotal = 0;
   states.forEach((st) => {
     const { line, product } = st;
-    if (!st.unavailable && st.qty !== line.quantity) { Cart.setQuantity(line.product_id, line.size, st.qty); return; }
+    if (!st.unavailable && st.qty !== line.quantity) { Cart.setQuantity(line.product_id, line.size, st.qty, line.color); return; }
     qtyTotal += st.qty; subtotal += lineTotal(st);
 
     const row = el("div", undefined, "bag-item");
     const thumb = el("div", undefined, "bag-thumb");
-    if (product) thumb.style.backgroundImage = `url("${product.image_url}")`;
+    if (product) thumb.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
     const info = el("div", undefined, "bag-info");
     info.append(el("strong", product ? product.name : "Produto indisponível"));
     if (st.unavailable) info.append(el("small", "Sem estoque. Remova para continuar.", "bag-warn"));
     else {
-      info.append(el("small", [product.category, line.size ? `Tamanho ${line.size}` : ""].filter(Boolean).join(" · ")));
+      info.append(el("small", [line.color, line.size ? `Tamanho ${line.size}` : ""].filter(Boolean).join(" · ") || product.category));
       const stepper = el("div", undefined, "stepper");
       const minus = el("button", "−"); minus.type = "button"; minus.setAttribute("aria-label", "Diminuir quantidade");
       const plus = el("button", "+"); plus.type = "button"; plus.setAttribute("aria-label", "Aumentar quantidade");
-      const inBag = Cart.lines().filter((l) => l.product_id === product.id).reduce((n, l) => n + l.quantity, 0);
-      plus.disabled = st.qty >= 10 || inBag >= product.stock;
-      minus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty - 1));
-      plus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty + 1));
+      plus.disabled = st.qty >= 10 || st.qty >= maxQty(product, line);
+      minus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty - 1, line.color));
+      plus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty + 1, line.color));
       stepper.append(minus, el("span", String(st.qty)), plus);
       info.append(stepper);
     }
     const side = el("div", undefined, "bag-side");
     if (product) side.append(el("strong", money(lineTotal(st))));
     const remove = el("button", "Remover", "bag-remove"); remove.type = "button";
-    remove.addEventListener("click", () => Cart.remove(line.product_id, line.size));
+    remove.addEventListener("click", () => Cart.remove(line.product_id, line.size, line.color));
     side.append(remove);
     row.append(thumb, info, side);
     box.append(row);
 
     const s = el("div", undefined, "summary-item");
     const t = el("div", undefined, "summary-thumb");
-    if (product) t.style.backgroundImage = `url("${product.image_url}")`;
-    const d = el("div"); d.append(el("strong", product ? product.name : "Indisponível"), el("small", `${line.size ? `Tam. ${line.size} · ` : ""}Qtd. ${st.qty}`));
+    if (product) t.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
+    const d = el("div"); d.append(el("strong", product ? product.name : "Indisponível"), el("small", `${line.color ? `${line.color} · ` : ""}${line.size ? `Tam. ${line.size} · ` : ""}Qtd. ${st.qty}`));
     s.append(t, d, el("b", product ? money(lineTotal(st)) : ""));
     sum.append(s);
   });
@@ -86,18 +86,24 @@ function renderItems() {
   renderTotals(subtotal);
 }
 
+// Desconto do PIX: só para exibir. Quem calcula de verdade é o servidor ao criar o pedido.
+const pixDiscount = (subtotal) => (paymentMethod() === "pix" && pixPercent > 0 ? Math.round(subtotal * pixPercent / 100) : 0);
 function renderTotals(subtotal) {
   if (subtotal === undefined) subtotal = lineState().reduce((n, st) => n + lineTotal(st), 0);
+  const discount = pixDiscount(subtotal), base = subtotal - discount;
+  $("#summary-discount-row").hidden = discount === 0;
+  $("#summary-discount").textContent = discount ? `− ${money(discount)}` : "";
+  $("#summary-discount-pct").textContent = discount ? `(${String(pixPercent).replace(".", ",")}%)` : "";
   const shipEl = $("#summary-shipping"), detail = $("#summary-ship-detail");
   detail.textContent = "";
-  if (!confirmed) { shipEl.textContent = "Informe o endereço"; $("#summary-total").textContent = money(subtotal); return; }
-  if (quoteError) { shipEl.textContent = "Indisponível"; $("#summary-total").textContent = money(subtotal); return; }
-  if (!quote) { shipEl.textContent = "Calculando…"; $("#summary-total").textContent = money(subtotal); return; }
+  if (!confirmed) { shipEl.textContent = "Informe o endereço"; $("#summary-total").textContent = money(base); return; }
+  if (quoteError) { shipEl.textContent = "Indisponível"; $("#summary-total").textContent = money(base); return; }
+  if (!quote) { shipEl.textContent = "Calculando…"; $("#summary-total").textContent = money(base); return; }
   shipEl.textContent = quote.shipping_cents ? money(quote.shipping_cents) : "Grátis";
   const parts = [`${confirmed.state}`];
   if (quote.days) parts.push(`até ${quote.days} dias`);
   detail.textContent = `(${parts.join(" · ")})`;
-  $("#summary-total").textContent = money(subtotal + quote.shipping_cents);
+  $("#summary-total").textContent = money(base + quote.shipping_cents);
 }
 
 // ---------- Frete (calculado no servidor) ----------
@@ -243,7 +249,7 @@ function refreshButton() {
     ? "Você verá a chave PIX logo após confirmar o pedido."
     : "Pagamento processado com segurança pelo Mercado Pago.";
 }
-form.querySelectorAll('[name="payment_method"]').forEach((r) => r.addEventListener("change", refreshButton));
+form.querySelectorAll('[name="payment_method"]').forEach((r) => r.addEventListener("change", () => { refreshButton(); renderTotals(); }));
 window.addEventListener("krypto:cart", () => { renderItems(); refreshQuote(); });
 
 form.addEventListener("submit", async (event) => {
@@ -271,7 +277,7 @@ form.addEventListener("submit", async (event) => {
         name: confirmed.name, email: confirmed.email, phone: confirmed.phone, address: confirmed.address, address_number: confirmed.address_number,
         complement: confirmed.complement || "", city: confirmed.city, state: confirmed.state, postal_code: confirmed.postal_code
       },
-      items: states.map((st) => ({ product_id: st.line.product_id, quantity: st.qty, size: st.line.size }))
+      items: states.map((st) => ({ product_id: st.line.product_id, quantity: st.qty, size: st.line.size, color: st.line.color || "" }))
     };
     const response = await fetch("/api/orders", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
@@ -301,6 +307,10 @@ form.addEventListener("submit", async (event) => {
     products = list;
     info = infoResponse.ok ? await infoResponse.json() : null;
   } catch (e) { showError("Não foi possível carregar a loja. Atualize a página."); return; }
+  const cfg = await K.loadConfig();
+  pixPercent = cfg.pix_discount_percent;
+  const pixBadge = document.querySelector("#pix-option .pay-badge");
+  if (pixBadge && pixPercent > 0) pixBadge.textContent = `${String(pixPercent).replace(".", ",")}% off`;
   const methods = info && info.payment_methods ? info.payment_methods : {};
   $("#pix-option").hidden = !methods.pix;
   $("#mp-option").hidden = !methods.mercadopago;
@@ -311,6 +321,10 @@ form.addEventListener("submit", async (event) => {
   const stored = K.Profile.read();
   savedAddress = validAddress(stored) ? stored : null;
   renderItems();
+  {
+    const started = lineState().filter((st) => !st.unavailable);
+    if (started.length) K.track("begin_checkout", { value: started.reduce((n, st) => n + lineTotal(st), 0) / 100, items: started.map((st) => ({ id: st.line.product_id, name: st.product.name, price: st.product.price_cents / 100, quantity: st.qty })) });
+  }
   if (savedAddress) showSaved(savedAddress, false);
   else showEditor("Informe seus dados e onde vamos entregar. Não precisa criar conta.", false);
   refreshButton();

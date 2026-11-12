@@ -1,5 +1,5 @@
 const crypto = require("node:crypto");
-const { getSupabase, sendError, requireMethod } = require("../_lib/supabase");
+const { getSupabase, sendError, requireMethod } = require('../../_lib/supabase');
 
 function validSignature(req, dataId) {
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;

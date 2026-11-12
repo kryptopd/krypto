@@ -44,6 +44,14 @@ function renderQr(payload) {
   } catch (_) { box.hidden = true; }
 }
 
+// Conta a compra uma única vez por pedido (e só se a pessoa aceitou os cookies de análise).
+function trackPurchase(data) {
+  if (data.payment_status !== "approved" || !window.Krypto) return;
+  const key = `krypto-purchase-${data.public_id}`;
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch (_) { return; }
+  window.Krypto.track("purchase", { value: data.total_cents / 100, transaction_id: data.public_id, items: (data.items || []).map((i) => ({ id: i.product_id, name: i.name, price: (i.unit_price_cents || 0) / 100, quantity: i.quantity })) });
+}
+
 function render(data) {
   latest = data;
   if (window.Krypto && window.Krypto.Orders) window.Krypto.Orders.add(data.public_id); // abrir o link já guarda em "Meus pedidos"
@@ -53,6 +61,11 @@ function render(data) {
   $("#order-status").textContent = labels[data.status] || data.status;
   $("#payment-status").textContent = (data.payment_method === "pix" ? "PIX · " : "") + (paymentLabels[data.payment_status] || data.payment_status);
   $("#order-subtotal").textContent = money(data.subtotal_cents);
+  $("#order-discount-row").hidden = !data.discount_cents;
+  $("#order-discount").textContent = data.discount_cents ? `− ${money(data.discount_cents)}` : "";
+  trackPurchase(data);
+  $("#review-cta").hidden = data.status !== "entregue";
+  $("#review-cta").href = `avaliacoes.html?pedido=${encodeURIComponent(data.public_id)}`;
   $("#order-shipping").textContent = data.shipping_cents ? money(data.shipping_cents) : "Grátis";
   $("#order-total").textContent = money(data.total_cents);
   $("#tracking").textContent = data.tracking_code ? `${data.shipping_provider || "Transportadora"}: ${data.tracking_code}` : "Será informado quando o pedido for enviado.";

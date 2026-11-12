@@ -1,5 +1,5 @@
-const { getSupabase, sendError, requireMethod, requireAdmin, paymentMethods } = require("./_lib/supabase");
-const S = require("./_lib/shipping");
+const { getSupabase, sendError, requireMethod, requireAdmin, paymentMethods } = require('../_lib/supabase');
+const S = require('../_lib/shipping');
 
 // GET  /api/shipping                         -> informações públicas (frete grátis, formas de pagamento, estados atendidos)
 // GET  /api/shipping?state=SP&items=12:2,15:1 -> cotação (valor, prazo, peso) calculada no servidor

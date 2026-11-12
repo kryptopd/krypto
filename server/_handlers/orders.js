@@ -1,6 +1,7 @@
-const { getSupabase, sendError, requireMethod, getSiteUrl, pixConfig } = require("./_lib/supabase");
-const { buildPixPayload } = require("./_lib/pix");
-const S = require("./_lib/shipping");
+const { getSupabase, sendError, requireMethod, getSiteUrl, pixConfig } = require('../_lib/supabase');
+const { buildPixPayload } = require('../_lib/pix');
+const S = require('../_lib/shipping');
+const { readStoreSettings } = require('../_lib/settings');
 
 function validEmail(value) {
   return typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -38,7 +39,8 @@ module.exports = async function handler(req, res) {
     if (rawItems.length < 1 || rawItems.length > 20) return res.status(400).json({ detail: "Sua sacola está vazia ou tem itens demais." });
     const items = rawItems.map((raw) => ({
       product_id: Number(raw && raw.product_id), quantity: Number(raw && raw.quantity),
-      size: String((raw && raw.size) || "").trim().slice(0, 20)
+      size: String((raw && raw.size) || "").trim().slice(0, 20),
+      color: String((raw && raw.color) || "").trim().slice(0, 30)
     }));
     for (const it of items) {
       if (!Number.isSafeInteger(it.product_id) || it.product_id < 1 || !Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 10) {
@@ -59,6 +61,9 @@ module.exports = async function handler(req, res) {
       .eq("email", buyerEmail).eq("status", "aguardando_pagamento").eq("payment_status", "pending");
     if (openError) throw openError;
     if ((openOrders || 0) >= 3) return res.status(429).json({ detail: "Você já tem 3 pedidos aguardando pagamento. Pague ou aguarde expirarem para fazer outro." });
+    // Desconto PIX definido no painel; o banco calcula o valor (o navegador nunca informa desconto).
+    const store = await readStoreSettings(supabase);
+    const pixDiscountPercent = paymentMethod === "pix" ? Number(store.pix_discount_percent || 0) : 0;
     const { data, error } = await supabase.rpc("create_krypto_order_v2", {
       p_customer: {
         name: String(customer.name).trim().slice(0, 160), email: buyerEmail,
@@ -70,16 +75,26 @@ module.exports = async function handler(req, res) {
       p_items: items,
       p_shipping_cents: quote.shipping_cents,
       p_privacy_acknowledged: true,
-      p_user_id: null
+      p_user_id: null,
+      ...(pixDiscountPercent > 0 ? { p_pix_discount_percent: pixDiscountPercent } : {})
     });
     if (error) {
       if (/OUT_OF_STOCK/.test(error.message || "")) return res.status(409).json({ detail: "Uma das peças não tem estoque suficiente para essa quantidade. Ajuste a sacola." });
       if (/PRODUCT_NOT_FOUND/.test(error.message || "")) return res.status(404).json({ detail: "Um produto da sacola não está mais disponível." });
       if (/INVALID_SIZE/.test(error.message || "")) return res.status(400).json({ detail: "Tamanho inválido para um dos produtos." });
+      if (/INVALID_VARIANT/.test(error.message || "")) return res.status(400).json({ detail: "Essa combinação de cor e tamanho não está disponível. Atualize a sacola." });
+      if (error.code === "PGRST202") return res.status(503).json({ detail: "A loja está sendo atualizada. Tente novamente em instantes." });
+      if (/INVALID_COLOR/.test(error.message || "")) return res.status(400).json({ detail: "Cor inválida ou indisponível para um dos produtos. Atualize a sacola." });
       throw error;
     }
     const order = Array.isArray(data) ? data[0] : data;
     createdPublicId = order.public_id;
+    // Se o banco ainda não recebeu a migração das cores, a cor escolhida se perderia no pedido: desfaz.
+    if (items.some((it) => it.color) && !(order.order_items || []).every((line) => Object.prototype.hasOwnProperty.call(line, "color"))) {
+      await supabase.rpc("cancel_krypto_order", { p_public_id: order.public_id, p_reason: "payment_setup_failed" });
+      createdPublicId = null;
+      return res.status(503).json({ detail: "As cores das peças estão sendo configuradas. Tente novamente em instantes." });
+    }
 
     if (paymentMethod === "pix") {
       // Marca o pedido como PIX (prazo de reserva maior e confirmação manual pelo painel).
@@ -96,7 +111,7 @@ module.exports = async function handler(req, res) {
       res.setHeader("Cache-Control", "no-store");
       return res.status(201).json({
         id: order.public_id, payment_method: "pix", subtotal_cents: order.subtotal_cents,
-        shipping_cents: order.shipping_cents, total_cents: order.total_cents,
+        shipping_cents: order.shipping_cents, discount_cents: order.discount_cents || 0, total_cents: order.total_cents,
         pix_key: pix.pix_key, pix_reserve_hours: pix.pix_reserve_hours,
         pix_payload: buildPixPayload({ key: pix.pix_key, amountCents: order.total_cents, merchantName: pix.merchant_name, merchantCity: pix.merchant_city, txid: order.public_id })
       });
@@ -109,7 +124,7 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         items: [
           ...order.order_items.map((line) => ({
-            id: String(line.product_id), title: `${line.name}${line.size ? ` (${line.size})` : ""}`.slice(0, 250),
+            id: String(line.product_id), title: `${line.name}${line.color ? ` - ${line.color}` : ""}${line.size ? ` (${line.size})` : ""}`.slice(0, 250),
             quantity: line.quantity, currency_id: "BRL", unit_price: line.unit_price_cents / 100
           })),
           ...(quote.shipping_cents > 0 ? [{ id: "shipping", title: quote.name, quantity: 1, currency_id: "BRL", unit_price: quote.shipping_cents / 100 }] : [])

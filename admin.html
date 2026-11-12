@@ -58,6 +58,10 @@
       <button class="admin-tab" role="tab" type="button" id="tab-categorias" aria-controls="panel-categorias" data-tab="categorias">Categorias</button>
       <button class="admin-tab" role="tab" type="button" id="tab-frete" aria-controls="panel-frete" data-tab="frete">Frete</button>
       <button class="admin-tab" role="tab" type="button" id="tab-pedidos" aria-controls="panel-pedidos" data-tab="pedidos">Pedidos</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-avaliacoes" aria-controls="panel-avaliacoes" data-tab="avaliacoes">Avaliações</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-aviseme" aria-controls="panel-aviseme" data-tab="aviseme">Avise-me <b class="tab-count" id="alerts-tab-count" hidden>0</b></button>
+      <button class="admin-tab" role="tab" type="button" id="tab-configuracoes" aria-controls="panel-configuracoes" data-tab="configuracoes">Configurações</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-atendimento" aria-controls="panel-atendimento" data-tab="atendimento">Atendimento</button>
     </nav>
 
     <div class="admin-tab-panel" role="tabpanel" id="panel-produtos" aria-labelledby="tab-produtos" data-panel="produtos" hidden>
@@ -68,7 +72,6 @@
           <label class="field">Nome do produto<input type="text" name="produto" placeholder="Ex.: Camiseta Essential" required></label>
           <label class="field">Categoria<select name="categoria"><option value="">Sem categoria</option></select><small class="field-help">Crie novas na aba <a href="#categorias" class="inline-link">Categorias</a>.</small></label>
           <label class="field">Preço (R$)<input type="number" name="preco" placeholder="0,00" min="0.01" step="0.01" required></label>
-          <label class="field">Estoque<input type="number" name="estoque" placeholder="Quantidade disponível" min="0" required></label>
           <label class="field">Peso (gramas)<input type="number" name="peso" placeholder="Ex.: 300" min="0" max="100000" step="1" value="300" required></label>
           <fieldset class="field editor-sizes">
             <legend>Tamanhos disponíveis</legend>
@@ -80,11 +83,28 @@
             </div>
             <small class="field-help">Marque os tamanhos que existem. Sem nenhum marcado, a peça é de tamanho único (ex.: acessórios).</small>
           </fieldset>
-          <div class="field editor-photos">
-            <span class="field-label" id="photos-label">Fotos da peça <small>(de 1 a 4 · a primeira é a capa)</small></span>
-            <div class="photo-slots" id="photo-slots" role="list" aria-labelledby="photos-label"></div>
-            <input type="file" id="photo-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
-            <small class="field-help" id="photo-help">Escolha fotos do celular ou do computador. Elas são reduzidas automaticamente antes do envio.</small>
+          <div class="field editor-colors">
+            <span class="field-label" id="colors-label">Cores e fotos <small>(até 12 cores · cada cor tem até 4 fotos · a primeira cor é a capa da peça)</small></span>
+            <div class="color-tabs" id="color-tabs" role="tablist" aria-labelledby="colors-label"></div>
+            <div class="color-detail">
+              <div class="color-detail-fields">
+                <label class="field">Nome da cor <small class="optional">(opcional se a peça tem uma cor só)</small><input type="text" id="color-name" maxlength="30" placeholder="Ex.: Preto" autocomplete="off"></label>
+                <label class="field color-hex-field">Tom<input type="color" id="color-hex" value="#111111"></label>
+                <button class="button button-outline color-remove" type="button" id="color-remove">Remover esta cor</button>
+              </div>
+              <div class="color-presets" id="color-presets" role="group" aria-label="Cores prontas"></div>
+              <div class="editor-photos">
+                <div class="photo-slots" id="photo-slots" role="list" aria-label="Fotos da cor selecionada"></div>
+                <input type="file" id="photo-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                <small class="field-help" id="photo-help">Escolha fotos do celular ou do computador. Elas são reduzidas automaticamente antes do envio.</small>
+              </div>
+            </div>
+            <small class="field-help">O estoque e os tamanhos valem para a peça toda. A cor escolhida pelo cliente aparece no pedido.</small>
+          </div>
+          <div class="field editor-stock">
+            <span class="field-label" id="stock-label">Estoque por cor e tamanho <small>(total: <b id="stock-total">0</b> peças)</small></span>
+            <div class="stock-matrix-wrap"><table class="stock-matrix" id="stock-matrix" aria-labelledby="stock-label"></table></div>
+            <small class="field-help" id="stock-help">Preencha quantas peças existem de cada combinação. Quando uma combinação acaba, a loja marca só ela como esgotada.</small>
           </div>
           <label class="field editor-description">Descrição<textarea name="descricao" rows="3" placeholder="Conte um pouco sobre a peça..."></textarea></label>
         </div>
@@ -177,6 +197,41 @@
     <div class="admin-disclaimer"><span>✳</span> <div><strong>Como confirmar um pagamento PIX:</strong> confira no app do seu banco se entrou o valor exato do pedido (de preferência com o nome do cliente ou o código do pedido) e clique em <strong>Confirmar PIX</strong>. Pedidos pagos pelo Mercado Pago são confirmados automaticamente. Só envie pedidos com pagamento confirmado. Os dados dos clientes são pessoais: use-os só para entregar o pedido.</div></div>
     </div>
 
+
+    <div class="admin-tab-panel" role="tabpanel" id="panel-avaliacoes" aria-labelledby="tab-avaliacoes" data-panel="avaliacoes" hidden>
+      <section class="admin-panel orders-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">MODERAÇÃO</span><h2>Avaliações e comentários</h2><p class="panel-description">Somente avaliações aprovadas aparecem publicamente na loja.</p></div><span class="panel-count" id="reviews-count">0 AVALIAÇÕES</span></div>
+        <div class="moderation-toolbar"><label>Filtrar avaliações <select id="reviews-filter" class="admin-status-select"><option value="pending">Aguardando moderação</option><option value="all">Todas</option><option value="approved">Aprovadas</option><option value="rejected">Rejeitadas</option></select></label></div><p class="form-note" id="reviews-feedback" role="status" aria-live="polite"></p><div id="admin-reviews" class="moderation-list"></div>
+      </section>
+    </div>
+    <div class="admin-tab-panel" role="tabpanel" id="panel-atendimento" data-panel="atendimento" aria-labelledby="tab-atendimento" hidden>
+      <section class="admin-panel orders-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">PÓS-VENDA</span><h2>Central de atendimento</h2><p class="panel-description">Gerencie trocas, devoluções, reembolsos e solicitações dos clientes.</p></div><span class="panel-count" id="support-count">0 SOLICITAÇÕES</span></div>
+        <p class="privacy-note">Anexos são privados e os links de visualização expiram após 15 minutos. A exclusão só é permitida depois de resolver ou rejeitar o caso.</p>
+        <p class="form-note" id="support-admin-feedback" role="status" aria-live="polite"></p><div id="admin-support" class="moderation-list"></div>
+      </section>
+    </div>
+    <div class="admin-tab-panel" role="tabpanel" id="panel-aviseme" data-panel="aviseme" aria-labelledby="tab-aviseme" hidden>
+      <section class="admin-panel orders-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">LISTA DE ESPERA</span><h2>Clientes esperando a peça voltar</h2><p class="panel-description">Quando um cliente pede "avise-me" numa peça esgotada, o e-mail entra aqui. Quando repuser o estoque, avise a lista e marque como avisados.</p></div><span class="panel-count" id="alerts-count">0 PEDIDOS</span></div>
+        <p class="form-note" id="alerts-feedback" role="status" aria-live="polite"></p>
+        <div id="admin-alerts" class="moderation-list"></div>
+      </section>
+    </div>
+    <div class="admin-tab-panel" role="tabpanel" id="panel-configuracoes" data-panel="configuracoes" aria-labelledby="tab-configuracoes" hidden>
+      <section class="admin-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">LOJA</span><h2>Configurações</h2><p class="panel-description">Desconto para quem paga no PIX e códigos para medir as visitas e as vendas.</p></div></div>
+        <form id="settings-form" novalidate>
+          <div class="settings-grid">
+            <label class="field">Desconto no PIX (%)<input type="number" name="pix_discount_percent" min="0" max="50" step="0.5" placeholder="0" inputmode="decimal"><small class="field-help">De 0 a 50. Aplicado sobre o valor das peças (não sobre o frete), só em pedidos pagos por PIX. Use 0 para não dar desconto.</small></label>
+            <label class="field">Google Analytics (ID de medição)<input type="text" name="ga_id" maxlength="24" placeholder="G-XXXXXXXXXX" autocomplete="off"><small class="field-help">Opcional. Aparece em Google Analytics → Administrador → Fluxos de dados.</small></label>
+            <label class="field">Pixel da Meta (Facebook/Instagram)<input type="text" name="pixel_id" maxlength="20" placeholder="Somente números" inputmode="numeric" autocomplete="off"><small class="field-help">Opcional. Aparece no Gerenciador de Eventos da Meta.</small></label>
+          </div>
+          <p class="privacy-note">Os códigos de análise só são carregados depois que o visitante aceita os cookies no aviso da loja (LGPD). Visitantes que recusam não são medidos.</p>
+          <div class="editor-footer"><p class="form-note" id="settings-feedback" role="status" aria-live="polite"></p><div class="editor-actions"><button class="button button-primary" type="submit">Salvar configurações <span>↗</span></button></div></div>
+        </form>
+      </section>
+    </div>
   </main>
   <footer class="site-footer admin-footer">
     <a class="brand" href="index.html"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>

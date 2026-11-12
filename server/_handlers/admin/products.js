@@ -1,4 +1,4 @@
-const { getSupabase, sendError, requireMethod, requireAdmin } = require("../_lib/supabase");
+const { getSupabase, sendError, requireMethod, requireAdmin } = require('../../_lib/supabase');
 
 function normalize(body) {
   const name = String(body.name || "").trim();

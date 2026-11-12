@@ -26,7 +26,7 @@ function card(o) {
   head.append(title, el("span", labels[o.status] || o.status, `order-badge phase-${phase(o)}`));
   article.append(head);
 
-  const names = (o.items || []).map((i) => `${i.quantity}× ${i.name}${i.size ? ` (${i.size})` : ""}`);
+  const names = (o.items || []).map((i) => `${i.quantity}× ${i.name}${i.color ? ` · ${i.color}` : ""}${i.size ? ` (${i.size})` : ""}`);
   if (names.length) article.append(el("p", names.join(" · "), "order-card-items"));
 
   if (o.status in stepIndex) {
@@ -43,6 +43,11 @@ function card(o) {
   const open = el("a", o.pix_payload ? "Pagar com PIX" : "Ver detalhes", o.pix_payload ? "button button-primary" : "button button-outline");
   open.href = `pedido.html?order=${encodeURIComponent(o.public_id)}`;
   actions.append(open);
+  if (o.status === "entregue") {
+    const rate = el("a", "Avaliar peças", "button button-outline");
+    rate.href = `avaliacoes.html?pedido=${encodeURIComponent(o.public_id)}`;
+    actions.append(rate);
+  }
   const hide = el("button", "Remover da lista", "link-button"); hide.type = "button";
   hide.addEventListener("click", () => { K.Orders.remove(o.public_id); orders = orders.filter((x) => x.public_id !== o.public_id); render(); K.refreshAccount(); });
   actions.append(hide);

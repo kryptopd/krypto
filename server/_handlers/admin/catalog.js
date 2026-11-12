@@ -1,5 +1,5 @@
-const { getSupabase, sendError, requireMethod, requireAdmin } = require("../_lib/supabase");
-const C = require("../_lib/catalog");
+const { getSupabase, sendError, requireMethod, requireAdmin } = require('../../_lib/supabase');
+const C = require('../../_lib/catalog');
 
 // Uma única função para o que o painel faz no catálogo (a Vercel gratuita limita a 12 funções):
 //   ?r=products              POST cadastra · PUT ?id= edita · DELETE ?id= tira da vitrine
@@ -59,14 +59,14 @@ module.exports = async function handler(req, res) {
         return res.status(204).end();
       }
       const patch = await C.normalizeProduct(supabase, body);
-      const { data: before, error: beforeError } = await supabase.from("products").select("images,image_url").eq("id", id).maybeSingle();
+      const { data: before, error: beforeError } = await supabase.from("products").select("images,image_url,colors").eq("id", id).maybeSingle();
       if (beforeError) throw beforeError;
       if (!before) throw C.fail(404, "Produto não encontrado.");
-      const oldUrls = [...(before.images || []), before.image_url].filter(Boolean);   // guarda antes de editar
+      const oldUrls = C.allPhotoUrls(before);   // guarda antes de editar
       const { data, error } = await supabase.from("products").update(patch).eq("id", id).select("*").single();
       if (error) throw error;
       // Fotos que saíram do produto também saem do Storage.
-      await C.removePhotos(supabase, oldUrls.filter((u) => !patch.images.includes(u)));
+      await C.removePhotos(supabase, oldUrls.filter((u) => !C.allPhotoUrls(patch).includes(u)));
       return res.status(200).json(data);
     }
 

@@ -20,7 +20,7 @@ Favoritos, histórico de visualização e carrinho são locais ao navegador; ain
 - **Tamanhos:** botões **M, G, GG, G1** (nenhum marcado = tamanho único, ex.: acessórios). A API só aceita esses quatro. Produtos antigos com outros tamanhos (ex.: P) continuam vendendo até serem editados.
 - **Etiqueta:** campo removido (do painel, da API e da vitrine). A coluna `tag` continua no banco, sem uso.
 - **Categorias:** nova aba **Categorias** no painel (criar e apagar). Cada peça escolhe uma categoria no cadastro (ou "Sem categoria"). Apagar uma categoria **não** apaga as peças: elas ficam sem categoria. A vitrine mostra como filtro só as categorias que têm peça.
-- **Limite de funções da Vercel (plano gratuito = 12):** produtos, categorias e envio de fotos foram juntados em **uma** função, `api/admin/catalog.js` (`?r=products|categories|upload`), e a lista pública de categorias é `GET /api/products?categories=1`. Os arquivos `api/admin/products.js` e `api/admin/products/[id].js` foram removidos; o projeto passou de 12 para 11 funções.
+- **Limite de funções da Vercel Hobby:** toda a API é atendida por uma única função de entrada, `api/[...path].js`. Os handlers e utilitários ficam fora da pasta `api`, em `server/_handlers/` e `server/_lib/`, para não serem detectados como funções independentes. As URLs públicas existentes são encaminhadas pelo roteador central.
 - **Migração obrigatória:** execute `supabase/migrations/20261107_photos_sizes_categories.sql` no SQL Editor (cria `images`, a tabela `categories`, libera categorias novas e cria a pasta de fotos). Sem ela o painel abre, mas avisa e recusa salvar produtos; a vitrine segue funcionando com a foto única.
 
 ## Compra sem cadastro, "Meus pedidos" e PIX com valor preenchido (novo)
@@ -139,3 +139,11 @@ O painel `/admin.html` autentica por e-mail e senha usando Supabase Auth. Para c
 - `ADMIN_EMAILS`: lista separada por vírgulas dos e-mails que podem administrar a loja, por exemplo `voce@exemplo.com`. O endereço deve ser o mesmo da conta em **Supabase → Authentication → Users**.
 
 Depois de salvar as variáveis, faça novo deploy na Vercel. Usuários cadastrados no Supabase Auth só entram no painel se o e-mail também estiver listado em `ADMIN_EMAILS`. Se mudar o e-mail autorizado, atualize essa variável e redeploy. A chave `SUPABASE_ANON_KEY` não concede privilégios administrativos por si só; todas as APIs administrativas validam o token no servidor e verificam a lista permitida.
+
+## API na Vercel Hobby
+
+A API pública usa uma única Serverless Function catch-all em `api/[...path].js`.
+As rotas de negócio continuam separadas por módulo em `server/_handlers/`, e os utilitários ficam em `server/_lib/`. Somente `api/[...path].js` permanece dentro da pasta de funções da Vercel.
+O roteador preserva os caminhos existentes (`/api/products`, `/api/orders`, `/api/admin/...`, `/api/reviews`, `/api/support`, `/api/shipping`, webhook e cron), encaminhando cada requisição ao handler correspondente.
+
+Essa organização reduz a contagem de funções da Vercel sem remover os endpoints usados pelo frontend. O cron continua apontando para `/api/cron/expire-orders`.

@@ -1,5 +1,5 @@
-const { getSupabase, sendError, requireMethod } = require("../_lib/supabase");
-const single = require("./[id]");
+const { getSupabase, sendError, requireMethod } = require('../../_lib/supabase');
+const single = require('./[id]');
 
 // Painel "Meus pedidos" sem conta:
 //  - { ids: [...] }            -> status dos pedidos que o navegador já guarda (máx. 20)

@@ -10,9 +10,12 @@ const ordersFeedback = document.querySelector("#orders-feedback");
 const paymentLabels = { pending: "Pendente", approved: "Pago", rejected: "Recusado", cancelled: "Cancelado", refunded: "Reembolsado", charged_back: "Contestado", expired: "Expirado" };
 let authorization = "";
 let supabaseAuth = null;
+let authInitError = "";
 let editingProductId = null;
-let categories = [], lastProducts = [], photos = [];   // photos: [{ id, url, preview, pending }]
-const SIZE_ORDER = ["M", "G", "GG", "G1"], MAX_PHOTOS = 4;
+let categories = [], lastProducts = [];
+// Cores da peça em edição: [{ id, name, hex, photos: [{ id, url, preview, pending }] }]. Sempre há ao menos uma.
+let colors = [], activeColor = 0;
+const SIZE_ORDER = ["M", "G", "GG", "G1"], MAX_PHOTOS = 4, MAX_COLORS = 12;
 const CATALOG_API = "/api/admin/catalog";
 
 const money = (cents) =>
@@ -74,6 +77,12 @@ function renderProducts(products) {
       element("p", product.description || "Sem descrição"),
       element("small", `Tamanhos: ${product.sizes && product.sizes.length ? product.sizes.join(", ") : "único"} · Peso: ${product.weight_grams ?? 300} g`, "admin-product-weight"),
     );
+    if (Array.isArray(product.colors) && product.colors.length) {
+      const dots = element("div", undefined, "admin-color-dots");
+      product.colors.forEach((c) => { const d = element("i", undefined, "color-dot"); d.style.background = c.hex; d.title = c.name; dots.append(d); });
+      dots.append(element("small", `${product.colors.length} ${product.colors.length === 1 ? "cor" : "cores"}`));
+      details.append(dots);
+    }
     const bottom = element("div", undefined, "admin-product-bottom");
     bottom.append(element("strong", money(product.price_cents)));
     const actions = element("div");
@@ -88,6 +97,67 @@ function renderProducts(products) {
     details.append(bottom);
     card.append(photo, details);
     productGrid.append(card);
+  });
+}
+
+// Alerta de confirmação no estilo da marca (substitui window.confirm).
+function confirmDeleteOrder(order) {
+  return new Promise((resolve) => {
+    const previousFocus = document.activeElement;
+    const overlay = element("div", undefined, "krypto-modal-overlay");
+    const box = element("div", undefined, "krypto-modal krypto-modal-danger");
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-labelledby", "krypto-modal-title");
+    box.setAttribute("aria-describedby", "krypto-modal-desc");
+    const list = element("ul", undefined, "krypto-modal-list");
+    [
+      "Esta exclusão é PERMANENTE e não pode ser desfeita.",
+      "Os dados do cliente, endereço, itens e histórico do pedido serão apagados.",
+      "Pedido sem pagamento ainda ativo tem o estoque devolvido ao catálogo.",
+      "Exclusão não estorna pagamento. Reembolsos devem ser feitos antes, no banco ou no Mercado Pago.",
+      "Considere cancelar o pedido em vez de excluir, se precisar manter o registro.",
+    ].forEach((text) => list.append(element("li", text)));
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.id = "krypto-modal-check";
+    const checkLabel = element("label", undefined, "krypto-modal-check");
+    checkLabel.htmlFor = "krypto-modal-check";
+    checkLabel.append(check, element("span", "Entendo que a exclusão é permanente e irreversível."));
+    const cancel = element("button", "Cancelar", "button button-outline");
+    const confirmBtn = element("button", "Excluir definitivamente", "button krypto-danger-button");
+    cancel.type = confirmBtn.type = "button";
+    confirmBtn.disabled = true;
+    check.addEventListener("change", () => { confirmBtn.disabled = !check.checked; });
+    const actions = element("div", undefined, "krypto-modal-actions");
+    actions.append(cancel, confirmBtn);
+    const title = element("h3", "Excluir pedido?");
+    title.id = "krypto-modal-title";
+    const desc = element("p", `Pedido #${order.public_id} · ${order.customer_name} · ${money(order.total_cents)}`, "krypto-modal-desc");
+    desc.id = "krypto-modal-desc";
+    box.append(element("span", "⚠ AÇÃO IRREVERSÍVEL", "krypto-modal-kicker"), title, desc, list, checkLabel, actions);
+    overlay.append(box);
+    const close = (result) => {
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      if (previousFocus && previousFocus.focus) previousFocus.focus();
+      resolve(result);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") close(false);
+      if (event.key === "Tab") {
+        const f = [check, cancel, confirmBtn].filter((n) => !n.disabled);
+        const i = f.indexOf(document.activeElement);
+        event.preventDefault();
+        f[(i + (event.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+      }
+    };
+    cancel.addEventListener("click", () => close(false));
+    confirmBtn.addEventListener("click", () => close(true));
+    overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) close(false); });
+    document.addEventListener("keydown", onKey);
+    document.body.append(overlay);
+    cancel.focus();
   });
 }
 
@@ -127,6 +197,7 @@ function renderOrders(orders) {
     const methodLabel = order.payment_method === "pix" ? "PIX" : "Mercado Pago";
     const paymentLabel = paymentLabels[order.payment_status] || order.payment_status || "Pendente";
     total.append(element("small", `${methodLabel} · ${paymentLabel}`));
+    if (order.discount_cents) total.append(element("small", `Desconto PIX −${money(order.discount_cents)}`));
     if (order.shipping_provider || order.tracking_code) total.append(element("small", `${order.shipping_provider || "Entrega"} ${order.tracking_code || ""}`));
 
     const statusCell = element("td");
@@ -192,6 +263,20 @@ function renderOrders(orders) {
       });
       statusCell.append(confirm);
     }
+    const remove = element("button", "Excluir pedido", "admin-action delete-action order-delete");
+    remove.type = "button";
+    remove.addEventListener("click", async () => {
+      if (!(await confirmDeleteOrder(order))) return;
+      remove.disabled = true;
+      try {
+        await api(`/api/admin/orders/${order.id}`, { method: "DELETE" });
+        setMessage(ordersFeedback, `Pedido #${order.public_id} excluído permanentemente.`);
+      } catch (error) {
+        setMessage(ordersFeedback, error.message, true);
+      }
+      await loadDashboard();
+    });
+    statusCell.append(remove);
     row.append(id, customer, contact, address, items, total, statusCell);
     ordersBody.append(row);
   });
@@ -334,6 +419,56 @@ shippingForm.addEventListener("submit", async (event) => {
   finally { button.disabled = false; }
 });
 
+
+async function loadReviews() {
+  const box=document.querySelector("#admin-reviews"); if(!box)return;
+  try {
+    const rows=await api("/api/admin/reviews");
+    const filter=document.querySelector("#reviews-filter");
+    const visible=rows.filter(r=>filter?.value==="all"||r.status===(filter?.value||"pending"));
+    document.querySelector("#reviews-count").textContent=`${rows.length} AVALIAÇÕES`;
+    box.replaceChildren();
+    if(!visible.length){box.append(element("p","Nenhuma avaliação neste filtro."));return;}
+    visible.forEach(r=>{
+      const card=element("article",undefined,"moderation-card");
+      const head=element("div",undefined,"moderation-head");
+      head.append(element("strong",`${r.product_name} · ${"★".repeat(r.rating)}${"☆".repeat(5-r.rating)}`),element("span",({pending:"Aguardando",approved:"Aprovada",rejected:"Rejeitada"})[r.status]||r.status,"moderation-status"));
+      const meta=element("small",`${r.customer_name} · ${r.email} · ${new Date(r.created_at).toLocaleString("pt-BR")}`);
+      const comment=element("p",r.comment);
+      const flag=r.spam_flag?element("strong",`⚠ ${r.spam_flag}`,"spam-flag"):null;
+      const actions=element("div",undefined,"moderation-actions");
+      const action=(label,status,cls)=>{const b=element("button",label,`admin-action ${cls||""}`);b.type="button";b.addEventListener("click",async()=>{try{await api(`/api/admin/reviews?id=${r.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});await loadReviews();}catch(e){setMessage(document.querySelector("#reviews-feedback"),e.message,true);}});actions.append(b);};
+      if(r.status!=="approved")action("Aprovar","approved");
+      if(r.status!=="rejected")action("Rejeitar","rejected","delete-action");
+      const del=element("button","Excluir","admin-action delete-action");del.type="button";del.addEventListener("click",async()=>{if(!confirm("Excluir permanentemente esta avaliação?"))return;try{await api(`/api/admin/reviews?id=${r.id}`,{method:"DELETE"});await loadReviews();}catch(e){setMessage(document.querySelector("#reviews-feedback"),e.message,true);}});actions.append(del);
+      card.append(head,meta);if(flag)card.append(flag);card.append(comment,actions);box.append(card);
+    });
+  } catch(e){setMessage(document.querySelector("#reviews-feedback"),e.message,true);}
+}
+async function loadSupport() {
+ const box=document.querySelector("#admin-support");if(!box)return;
+ try{
+  const rows=await api("/api/admin/support");document.querySelector("#support-count").textContent=`${rows.length} SOLICITAÇÕES`;box.replaceChildren();
+  if(!rows.length){box.append(element("p","Nenhuma solicitação recebida."));return;}
+  rows.forEach(r=>{
+   const card=element("article",undefined,"moderation-card");const head=element("div",undefined,"moderation-head");
+   head.append(element("strong",`${r.reason} · Protocolo ${r.public_code}`),element("span",({open:"Aberta",in_review:"Em análise",resolved:"Resolvida",rejected:"Rejeitada"})[r.status]||r.status,"moderation-status"));
+   const details=element("p",`${r.customer_name} · ${r.email} · ${r.phone}\nPedido: ${r.order_code} · Compra: ${new Date(`${r.purchase_date}T12:00:00`).toLocaleDateString("pt-BR")}`);
+   const comment=element("p",r.comment);const photos=element("div",undefined,"admin-attachments");
+   (r.photo_urls||[]).forEach(url=>{const a=document.createElement("a");a.href=url;a.target="_blank";a.rel="noopener";a.textContent="Abrir foto";photos.append(a);});
+   const actions=element("div",undefined,"moderation-actions");
+   const select=document.createElement("select");select.className="admin-status-select";[["open","Aberta"],["in_review","Em análise"],["resolved","Resolvida"],["rejected","Rejeitada"]].forEach(([v,l])=>select.add(new Option(l,v)));select.value=r.status;
+   const save=element("button","Atualizar status","admin-action");save.type="button";save.addEventListener("click",async()=>{try{await api(`/api/admin/support/${r.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:select.value})});await loadSupport();}catch(e){setMessage(document.querySelector("#support-admin-feedback"),e.message,true);}});
+   actions.append(select,save);
+   const del=element("button","Excluir solicitação","admin-action delete-action");del.type="button";del.disabled=r.status!=="resolved";del.title=del.disabled?"Marque como resolvida antes de excluir.":"Excluir definitivamente e apagar anexos";
+   del.addEventListener("click",async()=>{if(!confirm("Excluir esta solicitação e suas fotos permanentemente? Esta ação não pode ser desfeita."))return;try{await api(`/api/admin/support/${r.id}`,{method:"DELETE"});await loadSupport();}catch(e){setMessage(document.querySelector("#support-admin-feedback"),e.message,true);}});
+   actions.append(del);card.append(head,details,comment,photos,actions);box.append(card);
+  });
+ }catch(e){setMessage(document.querySelector("#support-admin-feedback"),e.message,true);}
+}
+
+document.querySelector("#reviews-filter")?.addEventListener("change", loadReviews);
+
 async function loadDashboard() {
   const data = await api("/api/admin/dashboard");
   document.querySelector("#stat-products").textContent = String(data.stats.product_count);
@@ -349,11 +484,12 @@ async function loadDashboard() {
   renderCategories(data.categories_error);
   renderOrders(data.orders);
   renderShipping(data.shipping, data.shipping_error);
+  await Promise.all([loadReviews(), loadSupport(), loadSettings(), loadAlerts()]);
 }
 
 async function tryLogin(email, password) {
   if (!supabaseAuth) {
-    setMessage(loginFeedback, "Não foi possível iniciar o login do Supabase. Confira a configuração e recarregue a página.", true);
+    setMessage(loginFeedback, authInitError || "Não foi possível iniciar o login do Supabase. Confira a configuração e recarregue a página.", true);
     return;
   }
   try {
@@ -376,7 +512,8 @@ async function initializeAuth() {
   try {
     if (!window.supabase?.createClient) throw new Error("Biblioteca de autenticação indisponível.");
     const configResponse = await fetch("/api/auth/config", { cache: "no-store" });
-    const config = await configResponse.json();
+    const config = await configResponse.json().catch(() => null);
+    if (!config) throw new Error(`A API não respondeu (/api/auth/config devolveu HTTP ${configResponse.status} sem JSON). A função da Vercel não está sendo encontrada ou falhou no deploy.`);
     if (!configResponse.ok) throw new Error(config.detail || "Configuração do Supabase incompleta.");
     supabaseAuth = window.supabase.createClient(config.url, config.anonKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: "krypto-admin-auth" }
@@ -398,7 +535,9 @@ async function initializeAuth() {
       authorization = sessionNow?.access_token ? `Bearer ${sessionNow.access_token}` : "";
     });
   } catch (error) {
-    setMessage(loginFeedback, error.message || "Erro ao iniciar autenticação.", true);
+    authInitError = error.message || "Erro ao iniciar autenticação.";
+    console.error("[KRYPTO admin] Falha ao iniciar autenticação:", error);
+    setMessage(loginFeedback, authInitError, true);
   }
 }
 
@@ -407,18 +546,33 @@ function editProduct(product) {
   productForm.elements.produto.value = product.name;
   fillCategorySelect(product.category || "");
   productForm.elements.preco.value = (product.price_cents / 100).toFixed(2);
-  productForm.elements.estoque.value = product.stock;
   productForm.elements.peso.value = product.weight_grams ?? 300;
   const chosen = new Set(product.sizes || []);
   productForm.querySelectorAll('input[name="tamanho"]').forEach((box) => { box.checked = chosen.has(box.value); });
-  const urls = (product.images && product.images.length ? product.images : [product.image_url]).filter(Boolean).slice(0, MAX_PHOTOS);
-  photos = urls.map((url) => ({ id: nextPhotoId(), url, preview: url, pending: false }));
-  renderPhotoSlots();
+  const toPhotos = (list) => (list || []).filter(Boolean).slice(0, MAX_PHOTOS).map((url) => ({ id: nextPhotoId(), url, preview: url, pending: false }));
+  const saved = Array.isArray(product.colors) ? product.colors : [];
+  resetColors(saved.length
+    ? saved.map((c) => newColor({ name: c.name, hex: c.hex, photos: toPhotos(c.images) }))
+    : [newColor({ photos: toPhotos(product.images && product.images.length ? product.images : [product.image_url]) })]);
+  // Estoque por combinação. Peça antiga (sem variações): todo o estoque vai para a primeira combinação, para você distribuir.
+  let legacyStock = 0;
+  stockQty.clear();
+  const sizesNow = checkedSizes();
+  if (Array.isArray(product.variants) && product.variants.length) {
+    product.variants.forEach((v) => {
+      const color = colors.find((c) => (saved.length ? c.name === v.color : true));
+      if (color) stockQty.set(`${color.id}|${v.size || ""}`, Number(v.stock) || 0);
+    });
+  } else if (Number(product.stock) > 0) {
+    stockQty.set(`${colors[0].id}|${sizesNow[0] || ""}`, Number(product.stock));
+    legacyStock = Number(product.stock);
+  }
+  renderStockMatrix();
   productForm.elements.descricao.value = product.description;
   productForm.querySelector('[type="submit"]').innerHTML = "Salvar alterações <span>↗</span>";
   showTab("produtos");
   document.querySelector("#produtos").scrollIntoView({ behavior: "smooth" });
-  setMessage(productFeedback, `Editando ${product.name}.`);
+  setMessage(productFeedback, legacyStock ? `Editando ${product.name}. O estoque antigo (${legacyStock}) foi colocado na primeira combinação: distribua entre cores e tamanhos.` : `Editando ${product.name}.`);
 }
 
 async function deleteProduct(product) {
@@ -439,17 +593,30 @@ loginForm.addEventListener("submit", async (event) => {
 
 productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (photos.some((p) => p.pending)) return setMessage(productFeedback, "Aguarde o envio das fotos terminar.", true);
-  if (!photos.length) return setMessage(productFeedback, "Adicione ao menos uma foto da peça.", true);
+  if (colors.some((c) => c.photos.some((p) => p.pending))) return setMessage(productFeedback, "Aguarde o envio das fotos terminar.", true);
+  const label = (c, i) => (c.name.trim() ? `da cor "${c.name.trim()}"` : `da cor ${i + 1}`);
+  const emptyIndex = colors.findIndex((c) => !c.photos.length);
+  if (emptyIndex >= 0) { activeColor = emptyIndex; renderColorEditor(); return setMessage(productFeedback, `Adicione ao menos uma foto ${label(colors[emptyIndex], emptyIndex)}.`, true); }
+  const multiple = colors.length > 1 || colors[0].name.trim();
+  if (multiple) {
+    const unnamed = colors.findIndex((c) => !c.name.trim());
+    if (unnamed >= 0) { activeColor = unnamed; renderColorEditor(); return setMessage(productFeedback, `Dê um nome para a cor ${unnamed + 1}.`, true); }
+    const names = colors.map((c) => c.name.trim().toLowerCase());
+    const dup = names.findIndex((n, i) => names.indexOf(n) !== i);
+    if (dup >= 0) { activeColor = dup; renderColorEditor(); return setMessage(productFeedback, `A cor "${colors[dup].name.trim()}" está repetida.`, true); }
+  }
   const form = new FormData(productForm);
   const payload = {
     name: form.get("produto"),
     category: form.get("categoria"),
     price: Number(form.get("preco")),
-    stock: Number(form.get("estoque")),
+    variants: stockVariants(),
     weight_grams: Number(form.get("peso")),
     sizes: form.getAll("tamanho"),
-    images: photos.map((p) => p.url),
+    // Peça de uma cor só e sem nome continua como antes (só fotos); com nome ou várias cores, envia as cores.
+    ...(multiple
+      ? { colors: colors.map((c) => ({ name: c.name.trim(), hex: c.hex, images: c.photos.map((p) => p.url) })) }
+      : { images: colors[0].photos.map((p) => p.url), colors: [] }),
     description: form.get("descricao"),
   };
   const button = productForm.querySelector('[type="submit"]');
@@ -477,31 +644,145 @@ productForm.addEventListener("submit", async (event) => {
 // "Limpar formulário" (e depois de salvar): volta ao modo de cadastro e esvazia as fotos.
 productForm.addEventListener("reset", () => {
   editingProductId = null;
-  photos.forEach((p) => { if (p.preview && p.preview.startsWith("blob:")) URL.revokeObjectURL(p.preview); });
-  photos = [];
-  renderPhotoSlots();
+  resetColors();
+  setTimeout(renderStockMatrix, 0);
   productForm.querySelector('[type="submit"]').innerHTML = "Cadastrar produto <span>↗</span>";
   setTimeout(() => { fillCategorySelect(""); productForm.elements.peso.value = 300; }, 0);
   setMessage(productFeedback, "Produtos cadastrados ficam visíveis na vitrine.");
 });
 
-// ---------- Fotos enviadas do aparelho (sem URL) ----------
+// ---------- Estoque por cor e tamanho ----------
+const stockQty = new Map();   // "idDaCor|tamanho" -> quantidade
+const stockMatrix = document.querySelector("#stock-matrix");
+const stockTotal = document.querySelector("#stock-total");
+const checkedSizes = () => SIZE_ORDER.filter((size) => productForm.querySelector(`input[name="tamanho"][value="${size}"]`)?.checked);
+// Peça de uma cor só e sem nome: a cor vai vazia. Com nome ou várias cores, vale o nome.
+const usesColorNames = () => colors.length > 1 || Boolean(colors[0].name.trim());
+const colorKeyName = (c) => (usesColorNames() ? c.name.trim() : "");
+function renderStockMatrix() {
+  const sizes = checkedSizes(), cols = sizes.length ? sizes : [""];
+  stockMatrix.replaceChildren();
+  const head = element("tr"); head.append(element("th", "Cor"));
+  cols.forEach((size) => head.append(element("th", size || "Estoque")));
+  const thead = element("thead"); thead.append(head);
+  const body = element("tbody");
+  colors.forEach((color, index) => {
+    const row = element("tr");
+    const label = element("th", undefined, "stock-color");
+    if (usesColorNames()) { const dot = element("i", undefined, "color-dot"); dot.style.background = color.hex; label.append(dot, document.createTextNode(color.name.trim() || `Cor ${index + 1}`)); }
+    else label.textContent = "Única";
+    row.append(label);
+    cols.forEach((size) => {
+      const key = `${color.id}|${size}`;
+      const cell = element("td"), input = document.createElement("input");
+      input.type = "number"; input.min = "0"; input.max = "99999"; input.step = "1"; input.inputMode = "numeric";
+      input.value = String(stockQty.get(key) || 0);
+      input.setAttribute("aria-label", `Estoque ${color.name.trim() || `cor ${index + 1}`}${size ? ` tamanho ${size}` : ""}`);
+      input.addEventListener("focus", () => input.select());
+      input.addEventListener("input", () => { const n = Math.max(0, Math.floor(Number(input.value) || 0)); stockQty.set(key, n); updateStockTotal(); });
+      cell.append(input); row.append(cell);
+    });
+    body.append(row);
+  });
+  stockMatrix.append(thead, body);
+  updateStockTotal();
+}
+function updateStockTotal() {
+  const sizes = checkedSizes(), cols = sizes.length ? sizes : [""];
+  stockTotal.textContent = String(colors.reduce((sum, c) => sum + cols.reduce((n, s) => n + (stockQty.get(`${c.id}|${s}`) || 0), 0), 0));
+}
+function stockVariants() {
+  const sizes = checkedSizes(), cols = sizes.length ? sizes : [""];
+  return colors.flatMap((c) => cols.map((size) => ({ color: colorKeyName(c), size, stock: stockQty.get(`${c.id}|${size}`) || 0 })));
+}
+productForm.querySelectorAll('input[name="tamanho"]').forEach((box) => box.addEventListener("change", renderStockMatrix));
+
+// ---------- Cores e fotos enviadas do aparelho (sem URL) ----------
 const photoSlots = document.querySelector("#photo-slots");
 const photoInput = document.querySelector("#photo-input");
 const photoHelp = document.querySelector("#photo-help");
+const colorTabs = document.querySelector("#color-tabs");
+const colorNameInput = document.querySelector("#color-name");
+const colorHexInput = document.querySelector("#color-hex");
+const colorRemove = document.querySelector("#color-remove");
+const colorPresets = document.querySelector("#color-presets");
 const PHOTO_HELP_DEFAULT = photoHelp.textContent;
-let photoSeq = 0;
+const PRESETS = [["Preto", "#111111"], ["Branco", "#f5f5f5"], ["Off-white", "#e8e2d0"], ["Cinza", "#8a8a8a"], ["Chumbo", "#3b3b40"], ["Azul-marinho", "#1f2a44"], ["Azul", "#2f5fd0"], ["Verde", "#2e6b4f"], ["Vermelho", "#c0392b"], ["Bordô", "#6d1f2c"], ["Bege", "#cdb99a"], ["Marrom", "#6b4a2f"], ["Rosa", "#e58fb3"], ["Roxo", "#7b3fb5"], ["Amarelo", "#e8c53a"], ["Laranja", "#e07a2f"]];
+let photoSeq = 0, colorSeq = 0;
 const nextPhotoId = () => `p${++photoSeq}`;
+const newColor = (data = {}) => ({ id: `c${++colorSeq}`, name: data.name || "", hex: data.hex || "#111111", photos: data.photos || [] });
+const cur = () => colors[activeColor];
+const releasePreview = (p) => { if (p && p.preview && p.preview.startsWith("blob:")) URL.revokeObjectURL(p.preview); };
+
+function resetColors(list) {
+  stockQty.clear();
+  colors.forEach((c) => c.photos.forEach(releasePreview));
+  colors = list && list.length ? list : [newColor()];
+  activeColor = 0;
+  renderColorEditor();
+}
+
+function renderColorEditor() {
+  colorTabs.replaceChildren();
+  colors.forEach((color, index) => {
+    const tab = element("button", undefined, "color-tab");
+    tab.type = "button"; tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(index === activeColor));
+    const dot = element("i", undefined, "color-dot"); dot.style.background = color.hex;
+    tab.append(dot, element("span", color.name.trim() || `Cor ${index + 1}`), element("small", `${color.photos.length} ${color.photos.length === 1 ? "foto" : "fotos"}`));
+    if (index === 0 && colors.length > 1) tab.append(element("b", "CAPA", "color-cover"));
+    tab.addEventListener("click", () => { activeColor = index; renderColorEditor(); });
+    colorTabs.append(tab);
+  });
+  if (colors.length < MAX_COLORS) {
+    const add = element("button", "+ Adicionar cor", "color-tab color-add"); add.type = "button";
+    add.addEventListener("click", () => { colors.push(newColor()); activeColor = colors.length - 1; renderColorEditor(); colorNameInput.focus(); });
+    colorTabs.append(add);
+  }
+  colorNameInput.value = cur().name;
+  colorHexInput.value = cur().hex;
+  colorRemove.hidden = colors.length < 2;
+  colorPresets.replaceChildren();
+  PRESETS.forEach(([name, hex]) => {
+    const b = element("button", undefined, "swatch-preset"); b.type = "button"; b.style.setProperty("--swatch", hex);
+    b.title = name; b.setAttribute("aria-label", `Usar ${name}`); b.setAttribute("aria-pressed", String(cur().hex.toLowerCase() === hex && cur().name === name));
+    b.addEventListener("click", () => { cur().name = name; cur().hex = hex; renderColorEditor(); });
+    colorPresets.append(b);
+  });
+  renderPhotoSlots();
+  renderStockMatrix();
+}
+colorNameInput.addEventListener("input", () => {
+  cur().name = colorNameInput.value;
+  renderStockMatrix();
+  const tab = colorTabs.querySelectorAll(".color-tab")[activeColor];
+  if (tab) tab.querySelector("span").textContent = cur().name.trim() || `Cor ${activeColor + 1}`;
+});
+colorHexInput.addEventListener("input", () => {
+  cur().hex = colorHexInput.value;
+  const dot = colorTabs.querySelectorAll(".color-dot")[activeColor];
+  if (dot) dot.style.background = cur().hex;
+});
+colorRemove.addEventListener("click", () => {
+  if (colors.length < 2) return;
+  const color = cur();
+  const used = color.photos.length;
+  if (used && !window.confirm(`Remover a cor "${color.name.trim() || activeColor + 1}" e suas ${used} ${used === 1 ? "foto" : "fotos"}?`)) return;
+  color.photos.forEach(releasePreview);
+  colors.splice(activeColor, 1);
+  activeColor = Math.max(0, activeColor - 1);
+  renderColorEditor();
+});
 
 function renderPhotoSlots() {
+  const photos = cur().photos;
   photoSlots.replaceChildren();
   photos.forEach((photo, index) => {
     const slot = element("div", undefined, `photo-slot${photo.pending ? " pending" : ""}`);
     slot.setAttribute("role", "listitem");
     const img = document.createElement("img");
-    img.src = photo.preview || photo.url; img.alt = `Foto ${index + 1}${index === 0 ? " (capa)" : ""}`;
+    img.src = photo.preview || photo.url; img.alt = `Foto ${index + 1}${index === 0 ? " (principal da cor)" : ""}`;
     slot.append(img);
-    if (index === 0) slot.append(element("span", "Capa", "photo-badge"));
+    if (index === 0) slot.append(element("span", "Principal", "photo-badge"));
     if (photo.pending) { slot.append(element("span", "Enviando…", "photo-status")); photoSlots.append(slot); return; }
     const bar = element("div", undefined, "photo-actions");
     const mk = (label, aria, handler, disabled) => {
@@ -524,16 +805,16 @@ function renderPhotoSlots() {
   }
 }
 function movePhoto(index, delta) {
-  const target = index + delta;
+  const photos = cur().photos, target = index + delta;
   if (target < 0 || target >= photos.length) return;
   [photos[index], photos[target]] = [photos[target], photos[index]];
   renderPhotoSlots();
 }
 function removePhoto(id) {
-  const gone = photos.find((p) => p.id === id);
-  if (gone && gone.preview && gone.preview.startsWith("blob:")) URL.revokeObjectURL(gone.preview);
-  photos = photos.filter((p) => p.id !== id);
-  renderPhotoSlots();
+  const color = cur();
+  releasePreview(color.photos.find((p) => p.id === id));
+  color.photos = color.photos.filter((p) => p.id !== id);
+  renderColorEditor();
 }
 
 // Lê a foto, reduz para no máximo 1400 px e converte em JPEG leve (cabe no limite de envio e carrega rápido na loja).
@@ -562,19 +843,19 @@ async function compressPhoto(file) {
   return dataUrl;
 }
 
-async function uploadFile(file) {
+async function uploadFile(color, file) {
   const photo = { id: nextPhotoId(), url: "", preview: URL.createObjectURL(file), pending: true };
-  photos.push(photo); renderPhotoSlots();
+  color.photos.push(photo); renderColorEditor();
   try {
     const data = await compressPhoto(file);
     const saved = await api(`${CATALOG_API}?r=upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
     photo.url = saved.url; photo.pending = false;
   } catch (error) {
-    photos = photos.filter((p) => p.id !== photo.id);
+    color.photos = color.photos.filter((p) => p.id !== photo.id);
     URL.revokeObjectURL(photo.preview);
     setMessage(photoHelp, `${file.name}: ${error.message}`, true);
   }
-  renderPhotoSlots();
+  if (colors.includes(color)) renderColorEditor();   // a cor pode ter sido removida durante o envio
 }
 
 photoInput.addEventListener("change", async () => {
@@ -582,11 +863,74 @@ photoInput.addEventListener("change", async () => {
   photoInput.value = "";
   if (!files.length) return;
   setMessage(photoHelp, PHOTO_HELP_DEFAULT);
-  const room = MAX_PHOTOS - photos.length;
-  if (files.length > room) setMessage(photoHelp, room > 0 ? `Cabem só ${MAX_PHOTOS} fotos por peça: usei as ${room} primeiras.` : `Já são ${MAX_PHOTOS} fotos. Remova uma para trocar.`, true);
-  await Promise.all(files.slice(0, Math.max(0, room)).map(uploadFile));
+  const color = cur(), room = MAX_PHOTOS - color.photos.length;
+  if (files.length > room) setMessage(photoHelp, room > 0 ? `Cabem só ${MAX_PHOTOS} fotos por cor: usei as ${room} primeiras.` : `Esta cor já tem ${MAX_PHOTOS} fotos. Remova uma para trocar.`, true);
+  await Promise.all(files.slice(0, Math.max(0, room)).map((f) => uploadFile(color, f)));
 });
-renderPhotoSlots();
+resetColors();
+
+// ---------- Configurações da loja ----------
+const settingsForm = document.querySelector("#settings-form");
+const settingsFeedback = document.querySelector("#settings-feedback");
+async function loadSettings() {
+  try {
+    const s = await api("/api/admin/settings");
+    settingsForm.elements.pix_discount_percent.value = s.pix_discount_percent || "";
+    settingsForm.elements.ga_id.value = s.ga_id || "";
+    settingsForm.elements.pixel_id.value = s.pixel_id || "";
+  } catch (error) { setMessage(settingsFeedback, error.message, true); }
+}
+settingsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = settingsForm.querySelector('[type="submit"]');
+  button.disabled = true; setMessage(settingsFeedback, "Salvando…");
+  try {
+    const saved = await api("/api/admin/settings", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pix_discount_percent: settingsForm.elements.pix_discount_percent.value, ga_id: settingsForm.elements.ga_id.value, pixel_id: settingsForm.elements.pixel_id.value }),
+    });
+    settingsForm.elements.pix_discount_percent.value = saved.pix_discount_percent || "";
+    setMessage(settingsFeedback, saved.pix_discount_percent > 0 ? `Salvo. Quem pagar no PIX ganha ${String(saved.pix_discount_percent).replace(".", ",")}% de desconto (a vitrine atualiza em até 1 minuto).` : "Salvo. O desconto no PIX está desligado.");
+  } catch (error) { setMessage(settingsFeedback, error.message, true); }
+  finally { button.disabled = false; }
+});
+
+// ---------- Avise-me (lista de espera) ----------
+const alertsBox = document.querySelector("#admin-alerts");
+const alertsFeedback = document.querySelector("#alerts-feedback");
+const slugifyName = (name) => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "peca";
+async function loadAlerts() {
+  let data;
+  try { data = await api("/api/admin/alerts"); } catch (error) { setMessage(alertsFeedback, error.message, true); return; }
+  alertsBox.replaceChildren();
+  const total = (data.groups || []).reduce((n, g) => n + g.people.length, 0);
+  document.querySelector("#alerts-count").textContent = `${total} ${total === 1 ? "PESSOA" : "PESSOAS"}`;
+  const tabCount = document.querySelector("#alerts-tab-count");
+  tabCount.textContent = String(total); tabCount.hidden = total === 0;
+  if (data.missing_migration) { setMessage(alertsFeedback, "Execute a migração 20261110_store_upgrade.sql no Supabase para usar a lista de espera.", true); return; }
+  setMessage(alertsFeedback, "");
+  if (!data.groups.length) { alertsBox.append(element("p", "Ninguém na lista de espera por enquanto.", "category-empty")); return; }
+  data.groups.forEach((g) => {
+    const card = element("article", undefined, "moderation-card");
+    const head = element("div", undefined, "moderation-head");
+    head.append(element("strong", `${g.name} · ${g.people.length} ${g.people.length === 1 ? "pessoa" : "pessoas"}`));
+    head.append(element("span", g.stock > 0 ? `Voltou: ${g.stock} em estoque` : "Ainda esgotada", g.stock > 0 ? "moderation-status alert-back" : "moderation-status"));
+    const list = element("p", g.people.map((p) => `${p.email}${p.color || p.size ? ` (${[p.color, p.size].filter(Boolean).join(", ")})` : ""}`).join("\n"));
+    const actions = element("div", undefined, "moderation-actions");
+    const emails = [...new Set(g.people.map((p) => p.email))];
+    const copy = element("button", "Copiar e-mails", "admin-action"); copy.type = "button";
+    copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(emails.join(", ")); setMessage(alertsFeedback, `${emails.length} e-mails copiados.`); } catch (_) { setMessage(alertsFeedback, "Não foi possível copiar. Selecione os e-mails na lista.", true); } });
+    const mail = element("a", "Escrever e-mail", "admin-action");
+    mail.href = `mailto:?bcc=${encodeURIComponent(emails.join(","))}&subject=${encodeURIComponent(`${g.name} voltou ao estoque na KRYPTO`)}&body=${encodeURIComponent(`Boas notícias! ${g.name} voltou ao estoque.\n\n${location.origin}/produto/${g.product_id}-${slugifyName(g.name)}\n\nCorra, as peças são limitadas.`)}`;
+    const done = element("button", "Marcar como avisados", "admin-action delete-action"); done.type = "button";
+    done.addEventListener("click", async () => {
+      if (!window.confirm(`Apagar a lista de espera de "${g.name}"? Faça isso depois de avisar os clientes.`)) return;
+      try { await api(`/api/admin/alerts?product_id=${g.product_id}`, { method: "DELETE" }); await loadAlerts(); } catch (error) { setMessage(alertsFeedback, error.message, true); }
+    });
+    actions.append(copy, mail, done);
+    card.append(head, list, actions); alertsBox.append(card);
+  });
+}
 
 // ---------- Categorias ----------
 const categoryForm = document.querySelector("#category-form");
@@ -647,7 +991,7 @@ categoryForm.addEventListener("submit", async (event) => {
 });
 
 // ---------- Abas do painel ----------
-const TABS = ["produtos", "categorias", "frete", "pedidos"];
+const TABS = ["produtos", "categorias", "frete", "pedidos", "avaliacoes", "aviseme", "configuracoes", "atendimento"];
 const tabButtons = [...document.querySelectorAll(".admin-tab")];
 function showTab(name, { updateHash = true } = {}) {
   if (!TABS.includes(name)) name = "produtos";

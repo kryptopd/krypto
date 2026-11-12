@@ -1,4 +1,4 @@
-const { getSupabase, sendError, requireMethod } = require("../_lib/supabase");
+const { getSupabase, sendError, requireMethod } = require('../../_lib/supabase');
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["GET", "POST"])) return;
   const secret = process.env.CRON_SECRET;
