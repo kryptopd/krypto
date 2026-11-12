@@ -12,8 +12,10 @@ let authorization = "";
 let supabaseAuth = null;
 let authInitError = "";
 let editingProductId = null;
-let categories = [], lastProducts = [], photos = [];   // photos: [{ id, url, preview, pending }]
-const SIZE_ORDER = ["M", "G", "GG", "G1"], MAX_PHOTOS = 4;
+let categories = [], lastProducts = [];
+// Cores da peça em edição: [{ id, name, hex, photos: [{ id, url, preview, pending }] }]. Sempre há ao menos uma.
+let colors = [], activeColor = 0;
+const SIZE_ORDER = ["M", "G", "GG", "G1"], MAX_PHOTOS = 4, MAX_COLORS = 12;
 const CATALOG_API = "/api/admin/catalog";
 
 const money = (cents) =>
@@ -75,6 +77,12 @@ function renderProducts(products) {
       element("p", product.description || "Sem descrição"),
       element("small", `Tamanhos: ${product.sizes && product.sizes.length ? product.sizes.join(", ") : "único"} · Peso: ${product.weight_grams ?? 300} g`, "admin-product-weight"),
     );
+    if (Array.isArray(product.colors) && product.colors.length) {
+      const dots = element("div", undefined, "admin-color-dots");
+      product.colors.forEach((c) => { const d = element("i", undefined, "color-dot"); d.style.background = c.hex; d.title = c.name; dots.append(d); });
+      dots.append(element("small", `${product.colors.length} ${product.colors.length === 1 ? "cor" : "cores"}`));
+      details.append(dots);
+    }
     const bottom = element("div", undefined, "admin-product-bottom");
     bottom.append(element("strong", money(product.price_cents)));
     const actions = element("div");
@@ -89,6 +97,67 @@ function renderProducts(products) {
     details.append(bottom);
     card.append(photo, details);
     productGrid.append(card);
+  });
+}
+
+// Alerta de confirmação no estilo da marca (substitui window.confirm).
+function confirmDeleteOrder(order) {
+  return new Promise((resolve) => {
+    const previousFocus = document.activeElement;
+    const overlay = element("div", undefined, "krypto-modal-overlay");
+    const box = element("div", undefined, "krypto-modal krypto-modal-danger");
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-labelledby", "krypto-modal-title");
+    box.setAttribute("aria-describedby", "krypto-modal-desc");
+    const list = element("ul", undefined, "krypto-modal-list");
+    [
+      "Esta exclusão é PERMANENTE e não pode ser desfeita.",
+      "Os dados do cliente, endereço, itens e histórico do pedido serão apagados.",
+      "Pedido sem pagamento ainda ativo tem o estoque devolvido ao catálogo.",
+      "Exclusão não estorna pagamento. Reembolsos devem ser feitos antes, no banco ou no Mercado Pago.",
+      "Considere cancelar o pedido em vez de excluir, se precisar manter o registro.",
+    ].forEach((text) => list.append(element("li", text)));
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.id = "krypto-modal-check";
+    const checkLabel = element("label", undefined, "krypto-modal-check");
+    checkLabel.htmlFor = "krypto-modal-check";
+    checkLabel.append(check, element("span", "Entendo que a exclusão é permanente e irreversível."));
+    const cancel = element("button", "Cancelar", "button button-outline");
+    const confirmBtn = element("button", "Excluir definitivamente", "button krypto-danger-button");
+    cancel.type = confirmBtn.type = "button";
+    confirmBtn.disabled = true;
+    check.addEventListener("change", () => { confirmBtn.disabled = !check.checked; });
+    const actions = element("div", undefined, "krypto-modal-actions");
+    actions.append(cancel, confirmBtn);
+    const title = element("h3", "Excluir pedido?");
+    title.id = "krypto-modal-title";
+    const desc = element("p", `Pedido #${order.public_id} · ${order.customer_name} · ${money(order.total_cents)}`, "krypto-modal-desc");
+    desc.id = "krypto-modal-desc";
+    box.append(element("span", "⚠ AÇÃO IRREVERSÍVEL", "krypto-modal-kicker"), title, desc, list, checkLabel, actions);
+    overlay.append(box);
+    const close = (result) => {
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      if (previousFocus && previousFocus.focus) previousFocus.focus();
+      resolve(result);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") close(false);
+      if (event.key === "Tab") {
+        const f = [check, cancel, confirmBtn].filter((n) => !n.disabled);
+        const i = f.indexOf(document.activeElement);
+        event.preventDefault();
+        f[(i + (event.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+      }
+    };
+    cancel.addEventListener("click", () => close(false));
+    confirmBtn.addEventListener("click", () => close(true));
+    overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) close(false); });
+    document.addEventListener("keydown", onKey);
+    document.body.append(overlay);
+    cancel.focus();
   });
 }
 
@@ -193,6 +262,20 @@ function renderOrders(orders) {
       });
       statusCell.append(confirm);
     }
+    const remove = element("button", "Excluir pedido", "admin-action delete-action order-delete");
+    remove.type = "button";
+    remove.addEventListener("click", async () => {
+      if (!(await confirmDeleteOrder(order))) return;
+      remove.disabled = true;
+      try {
+        await api(`/api/admin/orders/${order.id}`, { method: "DELETE" });
+        setMessage(ordersFeedback, `Pedido #${order.public_id} excluído permanentemente.`);
+      } catch (error) {
+        setMessage(ordersFeedback, error.message, true);
+      }
+      await loadDashboard();
+    });
+    statusCell.append(remove);
     row.append(id, customer, contact, address, items, total, statusCell);
     ordersBody.append(row);
   });
@@ -466,9 +549,11 @@ function editProduct(product) {
   productForm.elements.peso.value = product.weight_grams ?? 300;
   const chosen = new Set(product.sizes || []);
   productForm.querySelectorAll('input[name="tamanho"]').forEach((box) => { box.checked = chosen.has(box.value); });
-  const urls = (product.images && product.images.length ? product.images : [product.image_url]).filter(Boolean).slice(0, MAX_PHOTOS);
-  photos = urls.map((url) => ({ id: nextPhotoId(), url, preview: url, pending: false }));
-  renderPhotoSlots();
+  const toPhotos = (list) => (list || []).filter(Boolean).slice(0, MAX_PHOTOS).map((url) => ({ id: nextPhotoId(), url, preview: url, pending: false }));
+  const saved = Array.isArray(product.colors) ? product.colors : [];
+  resetColors(saved.length
+    ? saved.map((c) => newColor({ name: c.name, hex: c.hex, photos: toPhotos(c.images) }))
+    : [newColor({ photos: toPhotos(product.images && product.images.length ? product.images : [product.image_url]) })]);
   productForm.elements.descricao.value = product.description;
   productForm.querySelector('[type="submit"]').innerHTML = "Salvar alterações <span>↗</span>";
   showTab("produtos");
@@ -494,8 +579,18 @@ loginForm.addEventListener("submit", async (event) => {
 
 productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (photos.some((p) => p.pending)) return setMessage(productFeedback, "Aguarde o envio das fotos terminar.", true);
-  if (!photos.length) return setMessage(productFeedback, "Adicione ao menos uma foto da peça.", true);
+  if (colors.some((c) => c.photos.some((p) => p.pending))) return setMessage(productFeedback, "Aguarde o envio das fotos terminar.", true);
+  const label = (c, i) => (c.name.trim() ? `da cor "${c.name.trim()}"` : `da cor ${i + 1}`);
+  const emptyIndex = colors.findIndex((c) => !c.photos.length);
+  if (emptyIndex >= 0) { activeColor = emptyIndex; renderColorEditor(); return setMessage(productFeedback, `Adicione ao menos uma foto ${label(colors[emptyIndex], emptyIndex)}.`, true); }
+  const multiple = colors.length > 1 || colors[0].name.trim();
+  if (multiple) {
+    const unnamed = colors.findIndex((c) => !c.name.trim());
+    if (unnamed >= 0) { activeColor = unnamed; renderColorEditor(); return setMessage(productFeedback, `Dê um nome para a cor ${unnamed + 1}.`, true); }
+    const names = colors.map((c) => c.name.trim().toLowerCase());
+    const dup = names.findIndex((n, i) => names.indexOf(n) !== i);
+    if (dup >= 0) { activeColor = dup; renderColorEditor(); return setMessage(productFeedback, `A cor "${colors[dup].name.trim()}" está repetida.`, true); }
+  }
   const form = new FormData(productForm);
   const payload = {
     name: form.get("produto"),
@@ -504,7 +599,10 @@ productForm.addEventListener("submit", async (event) => {
     stock: Number(form.get("estoque")),
     weight_grams: Number(form.get("peso")),
     sizes: form.getAll("tamanho"),
-    images: photos.map((p) => p.url),
+    // Peça de uma cor só e sem nome continua como antes (só fotos); com nome ou várias cores, envia as cores.
+    ...(multiple
+      ? { colors: colors.map((c) => ({ name: c.name.trim(), hex: c.hex, images: c.photos.map((p) => p.url) })) }
+      : { images: colors[0].photos.map((p) => p.url), colors: [] }),
     description: form.get("descricao"),
   };
   const button = productForm.querySelector('[type="submit"]');
@@ -532,31 +630,95 @@ productForm.addEventListener("submit", async (event) => {
 // "Limpar formulário" (e depois de salvar): volta ao modo de cadastro e esvazia as fotos.
 productForm.addEventListener("reset", () => {
   editingProductId = null;
-  photos.forEach((p) => { if (p.preview && p.preview.startsWith("blob:")) URL.revokeObjectURL(p.preview); });
-  photos = [];
-  renderPhotoSlots();
+  resetColors();
   productForm.querySelector('[type="submit"]').innerHTML = "Cadastrar produto <span>↗</span>";
   setTimeout(() => { fillCategorySelect(""); productForm.elements.peso.value = 300; }, 0);
   setMessage(productFeedback, "Produtos cadastrados ficam visíveis na vitrine.");
 });
 
-// ---------- Fotos enviadas do aparelho (sem URL) ----------
+// ---------- Cores e fotos enviadas do aparelho (sem URL) ----------
 const photoSlots = document.querySelector("#photo-slots");
 const photoInput = document.querySelector("#photo-input");
 const photoHelp = document.querySelector("#photo-help");
+const colorTabs = document.querySelector("#color-tabs");
+const colorNameInput = document.querySelector("#color-name");
+const colorHexInput = document.querySelector("#color-hex");
+const colorRemove = document.querySelector("#color-remove");
+const colorPresets = document.querySelector("#color-presets");
 const PHOTO_HELP_DEFAULT = photoHelp.textContent;
-let photoSeq = 0;
+const PRESETS = [["Preto", "#111111"], ["Branco", "#f5f5f5"], ["Off-white", "#e8e2d0"], ["Cinza", "#8a8a8a"], ["Chumbo", "#3b3b40"], ["Azul-marinho", "#1f2a44"], ["Azul", "#2f5fd0"], ["Verde", "#2e6b4f"], ["Vermelho", "#c0392b"], ["Bordô", "#6d1f2c"], ["Bege", "#cdb99a"], ["Marrom", "#6b4a2f"], ["Rosa", "#e58fb3"], ["Roxo", "#7b3fb5"], ["Amarelo", "#e8c53a"], ["Laranja", "#e07a2f"]];
+let photoSeq = 0, colorSeq = 0;
 const nextPhotoId = () => `p${++photoSeq}`;
+const newColor = (data = {}) => ({ id: `c${++colorSeq}`, name: data.name || "", hex: data.hex || "#111111", photos: data.photos || [] });
+const cur = () => colors[activeColor];
+const releasePreview = (p) => { if (p && p.preview && p.preview.startsWith("blob:")) URL.revokeObjectURL(p.preview); };
+
+function resetColors(list) {
+  colors.forEach((c) => c.photos.forEach(releasePreview));
+  colors = list && list.length ? list : [newColor()];
+  activeColor = 0;
+  renderColorEditor();
+}
+
+function renderColorEditor() {
+  colorTabs.replaceChildren();
+  colors.forEach((color, index) => {
+    const tab = element("button", undefined, "color-tab");
+    tab.type = "button"; tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(index === activeColor));
+    const dot = element("i", undefined, "color-dot"); dot.style.background = color.hex;
+    tab.append(dot, element("span", color.name.trim() || `Cor ${index + 1}`), element("small", `${color.photos.length} ${color.photos.length === 1 ? "foto" : "fotos"}`));
+    if (index === 0 && colors.length > 1) tab.append(element("b", "CAPA", "color-cover"));
+    tab.addEventListener("click", () => { activeColor = index; renderColorEditor(); });
+    colorTabs.append(tab);
+  });
+  if (colors.length < MAX_COLORS) {
+    const add = element("button", "+ Adicionar cor", "color-tab color-add"); add.type = "button";
+    add.addEventListener("click", () => { colors.push(newColor()); activeColor = colors.length - 1; renderColorEditor(); colorNameInput.focus(); });
+    colorTabs.append(add);
+  }
+  colorNameInput.value = cur().name;
+  colorHexInput.value = cur().hex;
+  colorRemove.hidden = colors.length < 2;
+  colorPresets.replaceChildren();
+  PRESETS.forEach(([name, hex]) => {
+    const b = element("button", undefined, "swatch-preset"); b.type = "button"; b.style.setProperty("--swatch", hex);
+    b.title = name; b.setAttribute("aria-label", `Usar ${name}`); b.setAttribute("aria-pressed", String(cur().hex.toLowerCase() === hex && cur().name === name));
+    b.addEventListener("click", () => { cur().name = name; cur().hex = hex; renderColorEditor(); });
+    colorPresets.append(b);
+  });
+  renderPhotoSlots();
+}
+colorNameInput.addEventListener("input", () => {
+  cur().name = colorNameInput.value;
+  const tab = colorTabs.querySelectorAll(".color-tab")[activeColor];
+  if (tab) tab.querySelector("span").textContent = cur().name.trim() || `Cor ${activeColor + 1}`;
+});
+colorHexInput.addEventListener("input", () => {
+  cur().hex = colorHexInput.value;
+  const dot = colorTabs.querySelectorAll(".color-dot")[activeColor];
+  if (dot) dot.style.background = cur().hex;
+});
+colorRemove.addEventListener("click", () => {
+  if (colors.length < 2) return;
+  const color = cur();
+  const used = color.photos.length;
+  if (used && !window.confirm(`Remover a cor "${color.name.trim() || activeColor + 1}" e suas ${used} ${used === 1 ? "foto" : "fotos"}?`)) return;
+  color.photos.forEach(releasePreview);
+  colors.splice(activeColor, 1);
+  activeColor = Math.max(0, activeColor - 1);
+  renderColorEditor();
+});
 
 function renderPhotoSlots() {
+  const photos = cur().photos;
   photoSlots.replaceChildren();
   photos.forEach((photo, index) => {
     const slot = element("div", undefined, `photo-slot${photo.pending ? " pending" : ""}`);
     slot.setAttribute("role", "listitem");
     const img = document.createElement("img");
-    img.src = photo.preview || photo.url; img.alt = `Foto ${index + 1}${index === 0 ? " (capa)" : ""}`;
+    img.src = photo.preview || photo.url; img.alt = `Foto ${index + 1}${index === 0 ? " (principal da cor)" : ""}`;
     slot.append(img);
-    if (index === 0) slot.append(element("span", "Capa", "photo-badge"));
+    if (index === 0) slot.append(element("span", "Principal", "photo-badge"));
     if (photo.pending) { slot.append(element("span", "Enviando…", "photo-status")); photoSlots.append(slot); return; }
     const bar = element("div", undefined, "photo-actions");
     const mk = (label, aria, handler, disabled) => {
@@ -579,16 +741,16 @@ function renderPhotoSlots() {
   }
 }
 function movePhoto(index, delta) {
-  const target = index + delta;
+  const photos = cur().photos, target = index + delta;
   if (target < 0 || target >= photos.length) return;
   [photos[index], photos[target]] = [photos[target], photos[index]];
   renderPhotoSlots();
 }
 function removePhoto(id) {
-  const gone = photos.find((p) => p.id === id);
-  if (gone && gone.preview && gone.preview.startsWith("blob:")) URL.revokeObjectURL(gone.preview);
-  photos = photos.filter((p) => p.id !== id);
-  renderPhotoSlots();
+  const color = cur();
+  releasePreview(color.photos.find((p) => p.id === id));
+  color.photos = color.photos.filter((p) => p.id !== id);
+  renderColorEditor();
 }
 
 // Lê a foto, reduz para no máximo 1400 px e converte em JPEG leve (cabe no limite de envio e carrega rápido na loja).
@@ -617,19 +779,19 @@ async function compressPhoto(file) {
   return dataUrl;
 }
 
-async function uploadFile(file) {
+async function uploadFile(color, file) {
   const photo = { id: nextPhotoId(), url: "", preview: URL.createObjectURL(file), pending: true };
-  photos.push(photo); renderPhotoSlots();
+  color.photos.push(photo); renderColorEditor();
   try {
     const data = await compressPhoto(file);
     const saved = await api(`${CATALOG_API}?r=upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
     photo.url = saved.url; photo.pending = false;
   } catch (error) {
-    photos = photos.filter((p) => p.id !== photo.id);
+    color.photos = color.photos.filter((p) => p.id !== photo.id);
     URL.revokeObjectURL(photo.preview);
     setMessage(photoHelp, `${file.name}: ${error.message}`, true);
   }
-  renderPhotoSlots();
+  if (colors.includes(color)) renderColorEditor();   // a cor pode ter sido removida durante o envio
 }
 
 photoInput.addEventListener("change", async () => {
@@ -637,11 +799,11 @@ photoInput.addEventListener("change", async () => {
   photoInput.value = "";
   if (!files.length) return;
   setMessage(photoHelp, PHOTO_HELP_DEFAULT);
-  const room = MAX_PHOTOS - photos.length;
-  if (files.length > room) setMessage(photoHelp, room > 0 ? `Cabem só ${MAX_PHOTOS} fotos por peça: usei as ${room} primeiras.` : `Já são ${MAX_PHOTOS} fotos. Remova uma para trocar.`, true);
-  await Promise.all(files.slice(0, Math.max(0, room)).map(uploadFile));
+  const color = cur(), room = MAX_PHOTOS - color.photos.length;
+  if (files.length > room) setMessage(photoHelp, room > 0 ? `Cabem só ${MAX_PHOTOS} fotos por cor: usei as ${room} primeiras.` : `Esta cor já tem ${MAX_PHOTOS} fotos. Remova uma para trocar.`, true);
+  await Promise.all(files.slice(0, Math.max(0, room)).map((f) => uploadFile(color, f)));
 });
-renderPhotoSlots();
+resetColors();
 
 // ---------- Categorias ----------
 const categoryForm = document.querySelector("#category-form");

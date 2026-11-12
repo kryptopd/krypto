@@ -26,7 +26,7 @@ function card(o) {
   head.append(title, el("span", labels[o.status] || o.status, `order-badge phase-${phase(o)}`));
   article.append(head);
 
-  const names = (o.items || []).map((i) => `${i.quantity}× ${i.name}${i.size ? ` (${i.size})` : ""}`);
+  const names = (o.items || []).map((i) => `${i.quantity}× ${i.name}${i.color ? ` · ${i.color}` : ""}${i.size ? ` (${i.size})` : ""}`);
   if (names.length) article.append(el("p", names.join(" · "), "order-card-items"));
 
   if (o.status in stepIndex) {

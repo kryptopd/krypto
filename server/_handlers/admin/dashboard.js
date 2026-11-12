@@ -17,7 +17,7 @@ module.exports = async function handler(req, res) {
     const orders = (ordersResult.data || []).map((order) => ({
       ...order,
       items: (order.items || []).map((item) =>
-        `${item.quantity}x ${item.name}${item.size ? ` (${item.size})` : ""}`
+        `${item.quantity}x ${item.name}${item.color ? ` - ${item.color}` : ""}${item.size ? ` (${item.size})` : ""}`
       ).join(", ")
     }));
     const allOrders = orders;

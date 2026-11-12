@@ -82,11 +82,23 @@
             </div>
             <small class="field-help">Marque os tamanhos que existem. Sem nenhum marcado, a peça é de tamanho único (ex.: acessórios).</small>
           </fieldset>
-          <div class="field editor-photos">
-            <span class="field-label" id="photos-label">Fotos da peça <small>(de 1 a 4 · a primeira é a capa)</small></span>
-            <div class="photo-slots" id="photo-slots" role="list" aria-labelledby="photos-label"></div>
-            <input type="file" id="photo-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
-            <small class="field-help" id="photo-help">Escolha fotos do celular ou do computador. Elas são reduzidas automaticamente antes do envio.</small>
+          <div class="field editor-colors">
+            <span class="field-label" id="colors-label">Cores e fotos <small>(até 12 cores · cada cor tem até 4 fotos · a primeira cor é a capa da peça)</small></span>
+            <div class="color-tabs" id="color-tabs" role="tablist" aria-labelledby="colors-label"></div>
+            <div class="color-detail">
+              <div class="color-detail-fields">
+                <label class="field">Nome da cor <small class="optional">(opcional se a peça tem uma cor só)</small><input type="text" id="color-name" maxlength="30" placeholder="Ex.: Preto" autocomplete="off"></label>
+                <label class="field color-hex-field">Tom<input type="color" id="color-hex" value="#111111"></label>
+                <button class="button button-outline color-remove" type="button" id="color-remove">Remover esta cor</button>
+              </div>
+              <div class="color-presets" id="color-presets" role="group" aria-label="Cores prontas"></div>
+              <div class="editor-photos">
+                <div class="photo-slots" id="photo-slots" role="list" aria-label="Fotos da cor selecionada"></div>
+                <input type="file" id="photo-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                <small class="field-help" id="photo-help">Escolha fotos do celular ou do computador. Elas são reduzidas automaticamente antes do envio.</small>
+              </div>
+            </div>
+            <small class="field-help">O estoque e os tamanhos valem para a peça toda. A cor escolhida pelo cliente aparece no pedido.</small>
           </div>
           <label class="field editor-description">Descrição<textarea name="descricao" rows="3" placeholder="Conte um pouco sobre a peça..."></textarea></label>
         </div>

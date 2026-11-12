@@ -9,7 +9,7 @@ function publicOrder(row) {
     subtotal_cents: row.subtotal_cents, shipping_cents: row.shipping_cents, total_cents: row.total_cents,
     created_at: row.created_at, tracking_code: row.tracking_code, shipping_provider: row.shipping_provider,
     payment_method: row.payment_method || "mercadopago",
-    items: (Array.isArray(row.items) ? row.items : []).map((i) => ({ name: i.name, quantity: i.quantity, size: i.size || "" }))
+    items: (Array.isArray(row.items) ? row.items : []).map((i) => ({ name: i.name, quantity: i.quantity, size: i.size || "", color: i.color || "" }))
   };
   if (result.payment_method === "pix" && result.status === "aguardando_pagamento" && result.payment_status === "pending") {
     const pix = pixConfig();

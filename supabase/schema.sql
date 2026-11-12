@@ -11,6 +11,7 @@ create table if not exists public.products (
   tag text not null default '',
   image_url text not null,
   images text[] not null default '{}' check (cardinality(images) <= 4),
+  colors jsonb not null default '[]'::jsonb check (jsonb_typeof(colors) = 'array' and jsonb_array_length(colors) <= 12),
   description text not null default '',
   active boolean not null default true,
   created_at timestamptz not null default now()
@@ -294,19 +295,28 @@ begin
   if p_privacy_acknowledged is distinct from true then raise exception 'PRIVACY_CONSENT_REQUIRED'; end if;
 
   for v_line in
-    select (e->>'product_id')::bigint as product_id, coalesce(e->>'size', '') as size, (e->>'quantity')::integer as quantity
+    select (e->>'product_id')::bigint as product_id, coalesce(e->>'size', '') as size,
+           coalesce(e->>'color', '') as color, (e->>'quantity')::integer as quantity
       from jsonb_array_elements(p_items) e
-     order by 1, 2
+     order by 1, 2, 3
   loop
     if v_line.quantity is null or v_line.quantity < 1 or v_line.quantity > 10 then raise exception 'INVALID_QUANTITY'; end if;
     select * into v_product from public.products where id = v_line.product_id and active = true for update;
     if not found then raise exception 'PRODUCT_NOT_FOUND'; end if;
     if v_product.stock < v_line.quantity then raise exception 'OUT_OF_STOCK'; end if;
     if cardinality(v_product.sizes) > 0 and not (v_line.size = any(v_product.sizes)) then raise exception 'INVALID_SIZE'; end if;
+    if jsonb_array_length(v_product.colors) > 0 then
+      if not exists (select 1 from jsonb_array_elements(v_product.colors) c where c->>'name' = v_line.color) then
+        raise exception 'INVALID_COLOR';
+      end if;
+    elsif v_line.color <> '' then
+      raise exception 'INVALID_COLOR';
+    end if;
     update public.products set stock = stock - v_line.quantity where id = v_product.id;
     v_subtotal := v_subtotal + v_product.price_cents * v_line.quantity;
     v_items := v_items || jsonb_build_array(jsonb_build_object(
       'product_id', v_product.id, 'name', v_product.name, 'quantity', v_line.quantity, 'size', v_line.size,
+      'color', v_line.color,
       'unit_price_cents', v_product.price_cents, 'weight_grams', v_product.weight_grams
     ));
   end loop;

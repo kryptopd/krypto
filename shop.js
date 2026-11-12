@@ -6,7 +6,7 @@
 
   // ---------- Sacola ----------
   function validLine(l) {
-    return l && Number.isSafeInteger(l.product_id) && l.product_id > 0 && Number.isInteger(l.quantity) && l.quantity > 0 && l.quantity <= 10 && typeof l.size === "string";
+    return l && Number.isSafeInteger(l.product_id) && l.product_id > 0 && Number.isInteger(l.quantity) && l.quantity > 0 && l.quantity <= 10 && typeof l.size === "string" && (l.color === undefined || typeof l.color === "string");
   }
   function readCart() {
     try {
@@ -19,26 +19,39 @@
     try { localStorage.setItem(CART_KEY, JSON.stringify(lines)); } catch (_) { /* navegador sem armazenamento: usa a memória */ }
     window.dispatchEvent(new CustomEvent("krypto:cart"));
   }
+  const same = (l, productId, size, color) => l.product_id === productId && l.size === size && (l.color || "") === (color || "");
   const Cart = {
     lines: readCart,
     count: () => readCart().reduce((sum, l) => sum + l.quantity, 0),
-    // Soma na linha do mesmo produto+tamanho; `max` limita ao estoque.
-    add(productId, size, quantity, max) {
+    // Soma na linha do mesmo produto+tamanho+cor; `max` limita ao estoque.
+    add(productId, size, quantity, max, color = "") {
       const lines = readCart();
-      const found = lines.find((l) => l.product_id === productId && l.size === size);
+      const found = lines.find((l) => same(l, productId, size, color));
       const limit = Math.min(10, max || 10);
       if (found) found.quantity = Math.min(limit, found.quantity + quantity);
-      else lines.push({ product_id: productId, size, quantity: Math.min(limit, quantity) });
+      else lines.push({ product_id: productId, size, color, quantity: Math.min(limit, quantity) });
       writeCart(lines);
     },
-    setQuantity(productId, size, quantity) {
-      const lines = readCart().map((l) => (l.product_id === productId && l.size === size ? { ...l, quantity } : l)).filter((l) => l.quantity > 0);
+    setQuantity(productId, size, quantity, color = "") {
+      const lines = readCart().map((l) => (same(l, productId, size, color) ? { ...l, quantity } : l)).filter((l) => l.quantity > 0);
       writeCart(lines);
     },
-    remove(productId, size) { writeCart(readCart().filter((l) => !(l.product_id === productId && l.size === size))); },
+    remove(productId, size, color = "") { writeCart(readCart().filter((l) => !same(l, productId, size, color))); },
     clear() { writeCart([]); },
     replace(lines) { writeCart(lines.filter(validLine)); }
   };
+
+  // ---------- Cores da peça ----------
+  const colorsOf = (product) => (product && Array.isArray(product.colors) ? product.colors.filter((c) => c && c.name) : []);
+  // Fotos da cor escolhida; sem cores (ou cor desconhecida) usa as fotos gerais da peça.
+  function imagesFor(product, colorName) {
+    const color = colorsOf(product).find((c) => c.name === colorName);
+    const list = color && color.images && color.images.length ? color.images : (product.images && product.images.length ? product.images : [product.image_url]);
+    return list.filter(Boolean).slice(0, 4);
+  }
+  const coverFor = (product, colorName) => imagesFor(product, colorName)[0] || product.image_url;
+  // A linha da sacola só é válida se a cor ainda existir na peça.
+  const lineColorOk = (product, line) => !product || colorsOf(product).length === 0 ? !line.color : colorsOf(product).some((c) => c.name === line.color);
 
   // ---------- Catálogo ----------
   let productsPromise = null;
@@ -108,5 +121,5 @@
   window.addEventListener("krypto:orders", refreshAccount);
 document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); });
 
-  window.Krypto = { money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
+  window.Krypto = { colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
 })();

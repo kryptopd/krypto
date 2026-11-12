@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
   else if (route === "admin/products") target = handlers.adminProducts;
   else if (route === "admin/reviews") target = handlers.adminReviews;
   else if (route === "admin/support") target = handlers.adminSupport;
-  else if (segments.length === 3 && segments[0] === "admin" && segments[1] === "orders" && method === "PATCH") {
+  else if (segments.length === 3 && segments[0] === "admin" && segments[1] === "orders" && ["PATCH", "DELETE"].includes(method)) {
     req.query.id = segments[2]; target = handlers.adminOrder;
   }
   else if (segments.length === 3 && segments[0] === "admin" && segments[1] === "support" && ["PATCH", "DELETE"].includes(method)) {

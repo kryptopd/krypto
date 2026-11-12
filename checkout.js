@@ -1,5 +1,5 @@
 const K = window.Krypto;
-const { money, Cart } = K;
+const { money, Cart, coverFor, lineColorOk } = K;
 const $ = (s) => document.querySelector(s);
 const form = $("#customer-form");
 const fields = form.elements;
@@ -27,7 +27,7 @@ const productById = (id) => products.find((p) => p.id === id);
 function lineState() {
   return Cart.lines().map((line) => {
     const product = productById(line.product_id);
-    const unavailable = !product || product.stock < 1;
+    const unavailable = !product || product.stock < 1 || !lineColorOk(product, line);
     const stockForProduct = product ? product.stock : 0;
     const qty = unavailable ? line.quantity : Math.min(line.quantity, stockForProduct, 10);
     return { line, product, unavailable, qty };
@@ -45,39 +45,39 @@ function renderItems() {
   let qtyTotal = 0, subtotal = 0;
   states.forEach((st) => {
     const { line, product } = st;
-    if (!st.unavailable && st.qty !== line.quantity) { Cart.setQuantity(line.product_id, line.size, st.qty); return; }
+    if (!st.unavailable && st.qty !== line.quantity) { Cart.setQuantity(line.product_id, line.size, st.qty, line.color); return; }
     qtyTotal += st.qty; subtotal += lineTotal(st);
 
     const row = el("div", undefined, "bag-item");
     const thumb = el("div", undefined, "bag-thumb");
-    if (product) thumb.style.backgroundImage = `url("${product.image_url}")`;
+    if (product) thumb.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
     const info = el("div", undefined, "bag-info");
     info.append(el("strong", product ? product.name : "Produto indisponível"));
     if (st.unavailable) info.append(el("small", "Sem estoque. Remova para continuar.", "bag-warn"));
     else {
-      info.append(el("small", [product.category, line.size ? `Tamanho ${line.size}` : ""].filter(Boolean).join(" · ")));
+      info.append(el("small", [line.color, line.size ? `Tamanho ${line.size}` : ""].filter(Boolean).join(" · ") || product.category));
       const stepper = el("div", undefined, "stepper");
       const minus = el("button", "−"); minus.type = "button"; minus.setAttribute("aria-label", "Diminuir quantidade");
       const plus = el("button", "+"); plus.type = "button"; plus.setAttribute("aria-label", "Aumentar quantidade");
       const inBag = Cart.lines().filter((l) => l.product_id === product.id).reduce((n, l) => n + l.quantity, 0);
       plus.disabled = st.qty >= 10 || inBag >= product.stock;
-      minus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty - 1));
-      plus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty + 1));
+      minus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty - 1, line.color));
+      plus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, st.qty + 1, line.color));
       stepper.append(minus, el("span", String(st.qty)), plus);
       info.append(stepper);
     }
     const side = el("div", undefined, "bag-side");
     if (product) side.append(el("strong", money(lineTotal(st))));
     const remove = el("button", "Remover", "bag-remove"); remove.type = "button";
-    remove.addEventListener("click", () => Cart.remove(line.product_id, line.size));
+    remove.addEventListener("click", () => Cart.remove(line.product_id, line.size, line.color));
     side.append(remove);
     row.append(thumb, info, side);
     box.append(row);
 
     const s = el("div", undefined, "summary-item");
     const t = el("div", undefined, "summary-thumb");
-    if (product) t.style.backgroundImage = `url("${product.image_url}")`;
-    const d = el("div"); d.append(el("strong", product ? product.name : "Indisponível"), el("small", `${line.size ? `Tam. ${line.size} · ` : ""}Qtd. ${st.qty}`));
+    if (product) t.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
+    const d = el("div"); d.append(el("strong", product ? product.name : "Indisponível"), el("small", `${line.color ? `${line.color} · ` : ""}${line.size ? `Tam. ${line.size} · ` : ""}Qtd. ${st.qty}`));
     s.append(t, d, el("b", product ? money(lineTotal(st)) : ""));
     sum.append(s);
   });
@@ -271,7 +271,7 @@ form.addEventListener("submit", async (event) => {
         name: confirmed.name, email: confirmed.email, phone: confirmed.phone, address: confirmed.address, address_number: confirmed.address_number,
         complement: confirmed.complement || "", city: confirmed.city, state: confirmed.state, postal_code: confirmed.postal_code
       },
-      items: states.map((st) => ({ product_id: st.line.product_id, quantity: st.qty, size: st.line.size }))
+      items: states.map((st) => ({ product_id: st.line.product_id, quantity: st.qty, size: st.line.size, color: st.line.color || "" }))
     };
     const response = await fetch("/api/orders", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)

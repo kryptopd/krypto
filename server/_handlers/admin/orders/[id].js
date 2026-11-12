@@ -1,11 +1,27 @@
 const { getSupabase, sendError, requireMethod, requireAdmin } = require('../../../_lib/supabase');
 module.exports = async function handler(req, res) {
-  if (!requireMethod(req, res, ["PATCH"])) return;
+  if (!requireMethod(req, res, ["PATCH", "DELETE"])) return;
   if (!(await requireAdmin(req, res))) return;
   try {
     const id = Number(req.query.id), body = req.body || {};
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ detail: "ID inválido." });
     const supabase = getSupabase();
+
+    // Exclusão permanente de pedido (irreversível).
+    if (req.method === "DELETE") {
+      const { data: order, error: orderError } = await supabase.from("orders").select("*").eq("id", id).single();
+      if (orderError) throw orderError;
+      if (order.payment_status === "approved" && ["confirmado", "preparando", "enviado"].includes(order.status))
+        return res.status(409).json({ detail: "Este pedido está pago e em andamento. Conclua a entrega, ou cancele e estorne o pagamento, antes de excluí-lo." });
+      // Pedido ainda ativo e sem pagamento: devolve o estoque reservado antes de apagar.
+      if (!order.inventory_released && order.payment_status !== "approved" && !["cancelado", "expirado"].includes(order.status)) {
+        const { error } = await supabase.rpc("cancel_krypto_order", { p_public_id: order.public_id, p_reason: "admin_deleted" });
+        if (error) throw error;
+      }
+      const { error } = await supabase.from("orders").delete().eq("id", id);
+      if (error) throw error;
+      return res.status(200).json({ id, deleted: true });
+    }
 
     // Confirmação manual de pagamento PIX (a chave PIX é estática, não há webhook).
     if (body.action === "confirm_payment") {
