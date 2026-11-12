@@ -47,12 +47,28 @@ function cleanColors(value) {
   });
 }
 
+// Estoque por variação: uma linha para cada combinação cor x tamanho ("" quando a peça não tem cor/tamanho).
+function cleanVariants(value, colors, sizes) {
+  const normName = (v) => String(v || "").trim().replace(/\s+/g, " ");
+  const colorNames = colors.length ? colors.map((c) => c.name) : [""];
+  const sizeList = sizes.length ? sizes : [""];
+  const given = new Map();
+  for (const raw of Array.isArray(value) ? value : []) {
+    const color = normName(raw && raw.color), size = String((raw && raw.size) || "").trim().toUpperCase(), stock = Number(raw && raw.stock);
+    if (!Number.isInteger(stock) || stock < 0 || stock > 99999) throw fail(400, "Estoque inválido: use números inteiros de 0 a 99999.");
+    if (colorNames.includes(color) && sizeList.includes(size)) given.set(`${color}|${size}`, stock);   // combinações antigas são descartadas
+  }
+  const out = [];
+  for (const color of colorNames) for (const size of sizeList) out.push({ color, size, stock: given.get(`${color}|${size}`) || 0 });
+  return out;
+}
+
 // Valida e normaliza o corpo do cadastro/edição de produto.
 async function normalizeProduct(supabase, body) {
   const name = String(body.name || "").trim();
-  const price = Number(body.price), stock = Number(body.stock);
+  const price = Number(body.price);
   if (!name) throw fail(400, "Informe o nome do produto.");
-  if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 0) throw fail(400, "Preço ou estoque inválido.");
+  if (!Number.isFinite(price) || price <= 0) throw fail(400, "Preço inválido.");
   const weight = body.weight_grams === undefined || body.weight_grams === "" ? 300 : Number(body.weight_grams);
   if (!Number.isInteger(weight) || weight < 0 || weight > 100000) throw fail(400, "Informe o peso em gramas (número inteiro entre 0 e 100000).");
   const colors = cleanColors(body.colors);
@@ -66,9 +82,19 @@ async function normalizeProduct(supabase, body) {
     if (error) throw isMissingSchema(error) ? fail(503, MIGRATION_HINT) : error;
     if (!data) throw fail(400, "Essa categoria não existe mais. Atualize a página e escolha outra.");
   }
+  const sizes = cleanSizes(body.sizes);
+  // Com variações, o estoque total é a soma delas. Sem variações (formato antigo), vale o número informado.
+  let variants = [], stock;
+  if (Array.isArray(body.variants)) {
+    variants = cleanVariants(body.variants, colors, sizes);
+    stock = variants.reduce((sum, v) => sum + v.stock, 0);
+  } else {
+    stock = Number(body.stock);
+    if (!Number.isInteger(stock) || stock < 0) throw fail(400, "Estoque inválido.");
+  }
   return {
-    name: name.slice(0, 160), category, price_cents: Math.round(price * 100), stock, weight_grams: weight,
-    sizes: cleanSizes(body.sizes), colors, images, image_url: images[0],
+    name: name.slice(0, 160), category, price_cents: Math.round(price * 100), stock, variants, weight_grams: weight,
+    sizes, colors, images, image_url: images[0],
     description: String(body.description || "").trim().slice(0, 2000), active: true
   };
 }
@@ -120,4 +146,4 @@ async function removePhotos(supabase, urls) {
   if (error) console.error("[KRYPTO] Não foi possível apagar fotos antigas do Storage", error);
 }
 
-module.exports = { MAX_COLORS, allPhotoUrls, cleanColors, SIZES, MAX_PHOTOS, BUCKET, MIGRATION_HINT, fail, isMissingSchema, normalizeProduct, uploadPhoto, removePhotos, cleanSizes };
+module.exports = { cleanVariants, MAX_COLORS, allPhotoUrls, cleanColors, SIZES, MAX_PHOTOS, BUCKET, MIGRATION_HINT, fail, isMissingSchema, normalizeProduct, uploadPhoto, removePhotos, cleanSizes };

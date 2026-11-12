@@ -43,6 +43,11 @@ function card(o) {
   const open = el("a", o.pix_payload ? "Pagar com PIX" : "Ver detalhes", o.pix_payload ? "button button-primary" : "button button-outline");
   open.href = `pedido.html?order=${encodeURIComponent(o.public_id)}`;
   actions.append(open);
+  if (o.status === "entregue") {
+    const rate = el("a", "Avaliar peças", "button button-outline");
+    rate.href = `avaliacoes.html?pedido=${encodeURIComponent(o.public_id)}`;
+    actions.append(rate);
+  }
   const hide = el("button", "Remover da lista", "link-button"); hide.type = "button";
   hide.addEventListener("click", () => { K.Orders.remove(o.public_id); orders = orders.filter((x) => x.public_id !== o.public_id); render(); K.refreshAccount(); });
   actions.append(hide);

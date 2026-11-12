@@ -9,7 +9,21 @@
    if(!rows.length){box.textContent="Ainda não há avaliações publicadas. Seja a primeira pessoa a compartilhar sua experiência.";return;}
    rows.forEach(r=>{const card=document.createElement("article");card.className="review-public";const h=document.createElement("h3");h.textContent=r.product_name;const star=document.createElement("div");star.className="review-stars";star.textContent=stars(r.rating);const p=document.createElement("p");p.textContent=r.comment;const small=document.createElement("small");small.textContent=`${r.customer_name} · ${new Date(r.created_at).toLocaleDateString("pt-BR")}`;card.append(h,star,p,small);box.append(card);});
   }).catch(()=>$("#approved-reviews").textContent="Não foi possível carregar as avaliações agora.");
-  reviewForm.addEventListener("submit",async e=>{e.preventDefault();const b=reviewForm.querySelector('[type="submit"]');b.disabled=true;feedback($("#review-feedback"),"Enviando sua avaliação…");const d=Object.fromEntries(new FormData(reviewForm));d.rating=Number(d.rating);try{const r=await fetch("/api/reviews",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});const j=await r.json();if(!r.ok)throw Error(j.detail||"Não foi possível enviar.");reviewForm.reset();feedback($("#review-feedback"),"✓ Avaliação recebida! Ela já consta como enviada e ficará visível no site assim que nossa equipe concluir a moderação.");}catch(err){feedback($("#review-feedback"),err.message,true);}finally{b.disabled=false;}});
+  const lookup=$("#review-lookup");let verified=null;
+  const pre=new URLSearchParams(location.search).get("pedido");if(pre)lookup.elements.order_code.value=pre.toUpperCase();
+  const post=async(body)=>{const r=await fetch("/api/reviews",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.detail||"Não foi possível concluir.");return j;};
+  lookup.addEventListener("submit",async e=>{e.preventDefault();const b=lookup.querySelector('[type="submit"]');b.disabled=true;feedback($("#lookup-feedback"),"Conferindo seu pedido…");
+   try{const d=Object.fromEntries(new FormData(lookup));const j=await post({action:"lookup",order_code:d.order_code,email:d.email,website:d.website});
+    const open=j.items.filter(i=>!i.reviewed);
+    if(!open.length){feedback($("#lookup-feedback"),"Você já avaliou todas as peças deste pedido. Obrigado!");return;}
+    verified={order_code:d.order_code,email:d.email};
+    const sel=$("#review-product");sel.replaceChildren();open.forEach(i=>{const o=document.createElement("option");o.value=i.product_id;o.textContent=i.name;sel.append(o);});
+    $("#review-greeting").textContent=`Olá, ${j.customer}! Conte como foi receber sua compra.`;
+    lookup.hidden=true;reviewForm.hidden=false;
+   }catch(err){feedback($("#lookup-feedback"),err.message,true);}finally{b.disabled=false;}});
+  reviewForm.addEventListener("submit",async e=>{e.preventDefault();const b=reviewForm.querySelector('[type="submit"]');b.disabled=true;feedback($("#review-feedback"),"Enviando sua avaliação…");const d=Object.fromEntries(new FormData(reviewForm));
+   try{await post({...verified,product_id:Number(d.product_id),rating:Number(d.rating),comment:d.comment,website:d.website});reviewForm.reset();reviewForm.hidden=true;lookup.hidden=false;lookup.reset();verified=null;feedback($("#lookup-feedback"),"✓ Avaliação recebida! Ela aparece na página da peça assim que nossa equipe concluir a moderação. Quer avaliar outra peça? Informe o pedido de novo.");}
+   catch(err){feedback($("#review-feedback"),err.message,true);}finally{b.disabled=false;}});
  }
  const supportForm=$("#support-form");
  if(supportForm){

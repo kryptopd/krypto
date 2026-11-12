@@ -5,6 +5,11 @@ const handlers = {
   adminDashboard: require("../server/_handlers/admin/dashboard"),
   adminOrder: require("../server/_handlers/admin/orders/[id]"),
   adminProducts: require("../server/_handlers/admin/products"),
+  adminSettings: require("../server/_handlers/admin/settings"),
+  adminAlerts: require("../server/_handlers/admin/alerts"),
+  config: require("../server/_handlers/config"),
+  stockAlert: require("../server/_handlers/stock-alert"),
+  seo: require("../server/_handlers/seo"),
   adminReviews: require("../server/_handlers/admin/reviews"),
   adminSupport: require("../server/_handlers/admin/support"),
   adminSupportItem: require("../server/_handlers/admin/support/[id]"),
@@ -48,6 +53,11 @@ module.exports = async function handler(req, res) {
   else if (route === "reviews") target = handlers.reviews;
   else if (route === "support") target = handlers.support;
   else if (route === "shipping") target = handlers.shipping;
+  else if (route === "config") target = handlers.config;
+  else if (route === "stock-alert") target = handlers.stockAlert;
+  else if (route === "page/product") target = handlers.seo;
+  else if (route === "page/sitemap") { req.query.kind = "sitemap"; target = handlers.seo; }
+  else if (route === "page/robots") { req.query.kind = "robots"; target = handlers.seo; }
   else if (route === "auth/config") target = handlers.authConfig;
   else if (route === "cron/expire-orders") target = handlers.expireOrders;
   else if (route === "webhooks/mercadopago") target = handlers.mercadoPagoWebhook;
@@ -56,6 +66,8 @@ module.exports = async function handler(req, res) {
   else if (route === "admin/products") target = handlers.adminProducts;
   else if (route === "admin/reviews") target = handlers.adminReviews;
   else if (route === "admin/support") target = handlers.adminSupport;
+  else if (route === "admin/settings") target = handlers.adminSettings;
+  else if (route === "admin/alerts") target = handlers.adminAlerts;
   else if (segments.length === 3 && segments[0] === "admin" && segments[1] === "orders" && ["PATCH", "DELETE"].includes(method)) {
     req.query.id = segments[2]; target = handlers.adminOrder;
   }

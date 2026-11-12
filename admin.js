@@ -197,6 +197,7 @@ function renderOrders(orders) {
     const methodLabel = order.payment_method === "pix" ? "PIX" : "Mercado Pago";
     const paymentLabel = paymentLabels[order.payment_status] || order.payment_status || "Pendente";
     total.append(element("small", `${methodLabel} · ${paymentLabel}`));
+    if (order.discount_cents) total.append(element("small", `Desconto PIX −${money(order.discount_cents)}`));
     if (order.shipping_provider || order.tracking_code) total.append(element("small", `${order.shipping_provider || "Entrega"} ${order.tracking_code || ""}`));
 
     const statusCell = element("td");
@@ -483,7 +484,7 @@ async function loadDashboard() {
   renderCategories(data.categories_error);
   renderOrders(data.orders);
   renderShipping(data.shipping, data.shipping_error);
-  await Promise.all([loadReviews(), loadSupport()]);
+  await Promise.all([loadReviews(), loadSupport(), loadSettings(), loadAlerts()]);
 }
 
 async function tryLogin(email, password) {
@@ -545,7 +546,6 @@ function editProduct(product) {
   productForm.elements.produto.value = product.name;
   fillCategorySelect(product.category || "");
   productForm.elements.preco.value = (product.price_cents / 100).toFixed(2);
-  productForm.elements.estoque.value = product.stock;
   productForm.elements.peso.value = product.weight_grams ?? 300;
   const chosen = new Set(product.sizes || []);
   productForm.querySelectorAll('input[name="tamanho"]').forEach((box) => { box.checked = chosen.has(box.value); });
@@ -554,11 +554,25 @@ function editProduct(product) {
   resetColors(saved.length
     ? saved.map((c) => newColor({ name: c.name, hex: c.hex, photos: toPhotos(c.images) }))
     : [newColor({ photos: toPhotos(product.images && product.images.length ? product.images : [product.image_url]) })]);
+  // Estoque por combinação. Peça antiga (sem variações): todo o estoque vai para a primeira combinação, para você distribuir.
+  let legacyStock = 0;
+  stockQty.clear();
+  const sizesNow = checkedSizes();
+  if (Array.isArray(product.variants) && product.variants.length) {
+    product.variants.forEach((v) => {
+      const color = colors.find((c) => (saved.length ? c.name === v.color : true));
+      if (color) stockQty.set(`${color.id}|${v.size || ""}`, Number(v.stock) || 0);
+    });
+  } else if (Number(product.stock) > 0) {
+    stockQty.set(`${colors[0].id}|${sizesNow[0] || ""}`, Number(product.stock));
+    legacyStock = Number(product.stock);
+  }
+  renderStockMatrix();
   productForm.elements.descricao.value = product.description;
   productForm.querySelector('[type="submit"]').innerHTML = "Salvar alterações <span>↗</span>";
   showTab("produtos");
   document.querySelector("#produtos").scrollIntoView({ behavior: "smooth" });
-  setMessage(productFeedback, `Editando ${product.name}.`);
+  setMessage(productFeedback, legacyStock ? `Editando ${product.name}. O estoque antigo (${legacyStock}) foi colocado na primeira combinação: distribua entre cores e tamanhos.` : `Editando ${product.name}.`);
 }
 
 async function deleteProduct(product) {
@@ -596,7 +610,7 @@ productForm.addEventListener("submit", async (event) => {
     name: form.get("produto"),
     category: form.get("categoria"),
     price: Number(form.get("preco")),
-    stock: Number(form.get("estoque")),
+    variants: stockVariants(),
     weight_grams: Number(form.get("peso")),
     sizes: form.getAll("tamanho"),
     // Peça de uma cor só e sem nome continua como antes (só fotos); com nome ou várias cores, envia as cores.
@@ -631,10 +645,57 @@ productForm.addEventListener("submit", async (event) => {
 productForm.addEventListener("reset", () => {
   editingProductId = null;
   resetColors();
+  setTimeout(renderStockMatrix, 0);
   productForm.querySelector('[type="submit"]').innerHTML = "Cadastrar produto <span>↗</span>";
   setTimeout(() => { fillCategorySelect(""); productForm.elements.peso.value = 300; }, 0);
   setMessage(productFeedback, "Produtos cadastrados ficam visíveis na vitrine.");
 });
+
+// ---------- Estoque por cor e tamanho ----------
+const stockQty = new Map();   // "idDaCor|tamanho" -> quantidade
+const stockMatrix = document.querySelector("#stock-matrix");
+const stockTotal = document.querySelector("#stock-total");
+const checkedSizes = () => SIZE_ORDER.filter((size) => productForm.querySelector(`input[name="tamanho"][value="${size}"]`)?.checked);
+// Peça de uma cor só e sem nome: a cor vai vazia. Com nome ou várias cores, vale o nome.
+const usesColorNames = () => colors.length > 1 || Boolean(colors[0].name.trim());
+const colorKeyName = (c) => (usesColorNames() ? c.name.trim() : "");
+function renderStockMatrix() {
+  const sizes = checkedSizes(), cols = sizes.length ? sizes : [""];
+  stockMatrix.replaceChildren();
+  const head = element("tr"); head.append(element("th", "Cor"));
+  cols.forEach((size) => head.append(element("th", size || "Estoque")));
+  const thead = element("thead"); thead.append(head);
+  const body = element("tbody");
+  colors.forEach((color, index) => {
+    const row = element("tr");
+    const label = element("th", undefined, "stock-color");
+    if (usesColorNames()) { const dot = element("i", undefined, "color-dot"); dot.style.background = color.hex; label.append(dot, document.createTextNode(color.name.trim() || `Cor ${index + 1}`)); }
+    else label.textContent = "Única";
+    row.append(label);
+    cols.forEach((size) => {
+      const key = `${color.id}|${size}`;
+      const cell = element("td"), input = document.createElement("input");
+      input.type = "number"; input.min = "0"; input.max = "99999"; input.step = "1"; input.inputMode = "numeric";
+      input.value = String(stockQty.get(key) || 0);
+      input.setAttribute("aria-label", `Estoque ${color.name.trim() || `cor ${index + 1}`}${size ? ` tamanho ${size}` : ""}`);
+      input.addEventListener("focus", () => input.select());
+      input.addEventListener("input", () => { const n = Math.max(0, Math.floor(Number(input.value) || 0)); stockQty.set(key, n); updateStockTotal(); });
+      cell.append(input); row.append(cell);
+    });
+    body.append(row);
+  });
+  stockMatrix.append(thead, body);
+  updateStockTotal();
+}
+function updateStockTotal() {
+  const sizes = checkedSizes(), cols = sizes.length ? sizes : [""];
+  stockTotal.textContent = String(colors.reduce((sum, c) => sum + cols.reduce((n, s) => n + (stockQty.get(`${c.id}|${s}`) || 0), 0), 0));
+}
+function stockVariants() {
+  const sizes = checkedSizes(), cols = sizes.length ? sizes : [""];
+  return colors.flatMap((c) => cols.map((size) => ({ color: colorKeyName(c), size, stock: stockQty.get(`${c.id}|${size}`) || 0 })));
+}
+productForm.querySelectorAll('input[name="tamanho"]').forEach((box) => box.addEventListener("change", renderStockMatrix));
 
 // ---------- Cores e fotos enviadas do aparelho (sem URL) ----------
 const photoSlots = document.querySelector("#photo-slots");
@@ -654,6 +715,7 @@ const cur = () => colors[activeColor];
 const releasePreview = (p) => { if (p && p.preview && p.preview.startsWith("blob:")) URL.revokeObjectURL(p.preview); };
 
 function resetColors(list) {
+  stockQty.clear();
   colors.forEach((c) => c.photos.forEach(releasePreview));
   colors = list && list.length ? list : [newColor()];
   activeColor = 0;
@@ -687,9 +749,11 @@ function renderColorEditor() {
     colorPresets.append(b);
   });
   renderPhotoSlots();
+  renderStockMatrix();
 }
 colorNameInput.addEventListener("input", () => {
   cur().name = colorNameInput.value;
+  renderStockMatrix();
   const tab = colorTabs.querySelectorAll(".color-tab")[activeColor];
   if (tab) tab.querySelector("span").textContent = cur().name.trim() || `Cor ${activeColor + 1}`;
 });
@@ -805,6 +869,69 @@ photoInput.addEventListener("change", async () => {
 });
 resetColors();
 
+// ---------- Configurações da loja ----------
+const settingsForm = document.querySelector("#settings-form");
+const settingsFeedback = document.querySelector("#settings-feedback");
+async function loadSettings() {
+  try {
+    const s = await api("/api/admin/settings");
+    settingsForm.elements.pix_discount_percent.value = s.pix_discount_percent || "";
+    settingsForm.elements.ga_id.value = s.ga_id || "";
+    settingsForm.elements.pixel_id.value = s.pixel_id || "";
+  } catch (error) { setMessage(settingsFeedback, error.message, true); }
+}
+settingsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = settingsForm.querySelector('[type="submit"]');
+  button.disabled = true; setMessage(settingsFeedback, "Salvando…");
+  try {
+    const saved = await api("/api/admin/settings", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pix_discount_percent: settingsForm.elements.pix_discount_percent.value, ga_id: settingsForm.elements.ga_id.value, pixel_id: settingsForm.elements.pixel_id.value }),
+    });
+    settingsForm.elements.pix_discount_percent.value = saved.pix_discount_percent || "";
+    setMessage(settingsFeedback, saved.pix_discount_percent > 0 ? `Salvo. Quem pagar no PIX ganha ${String(saved.pix_discount_percent).replace(".", ",")}% de desconto (a vitrine atualiza em até 1 minuto).` : "Salvo. O desconto no PIX está desligado.");
+  } catch (error) { setMessage(settingsFeedback, error.message, true); }
+  finally { button.disabled = false; }
+});
+
+// ---------- Avise-me (lista de espera) ----------
+const alertsBox = document.querySelector("#admin-alerts");
+const alertsFeedback = document.querySelector("#alerts-feedback");
+const slugifyName = (name) => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "peca";
+async function loadAlerts() {
+  let data;
+  try { data = await api("/api/admin/alerts"); } catch (error) { setMessage(alertsFeedback, error.message, true); return; }
+  alertsBox.replaceChildren();
+  const total = (data.groups || []).reduce((n, g) => n + g.people.length, 0);
+  document.querySelector("#alerts-count").textContent = `${total} ${total === 1 ? "PESSOA" : "PESSOAS"}`;
+  const tabCount = document.querySelector("#alerts-tab-count");
+  tabCount.textContent = String(total); tabCount.hidden = total === 0;
+  if (data.missing_migration) { setMessage(alertsFeedback, "Execute a migração 20261110_store_upgrade.sql no Supabase para usar a lista de espera.", true); return; }
+  setMessage(alertsFeedback, "");
+  if (!data.groups.length) { alertsBox.append(element("p", "Ninguém na lista de espera por enquanto.", "category-empty")); return; }
+  data.groups.forEach((g) => {
+    const card = element("article", undefined, "moderation-card");
+    const head = element("div", undefined, "moderation-head");
+    head.append(element("strong", `${g.name} · ${g.people.length} ${g.people.length === 1 ? "pessoa" : "pessoas"}`));
+    head.append(element("span", g.stock > 0 ? `Voltou: ${g.stock} em estoque` : "Ainda esgotada", g.stock > 0 ? "moderation-status alert-back" : "moderation-status"));
+    const list = element("p", g.people.map((p) => `${p.email}${p.color || p.size ? ` (${[p.color, p.size].filter(Boolean).join(", ")})` : ""}`).join("\n"));
+    const actions = element("div", undefined, "moderation-actions");
+    const emails = [...new Set(g.people.map((p) => p.email))];
+    const copy = element("button", "Copiar e-mails", "admin-action"); copy.type = "button";
+    copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(emails.join(", ")); setMessage(alertsFeedback, `${emails.length} e-mails copiados.`); } catch (_) { setMessage(alertsFeedback, "Não foi possível copiar. Selecione os e-mails na lista.", true); } });
+    const mail = element("a", "Escrever e-mail", "admin-action");
+    mail.href = `mailto:?bcc=${encodeURIComponent(emails.join(","))}&subject=${encodeURIComponent(`${g.name} voltou ao estoque na KRYPTO`)}&body=${encodeURIComponent(`Boas notícias! ${g.name} voltou ao estoque.\n\n${location.origin}/produto/${g.product_id}-${slugifyName(g.name)}\n\nCorra, as peças são limitadas.`)}`;
+    const done = element("button", "Marcar como avisados", "admin-action delete-action"); done.type = "button";
+    done.addEventListener("click", async () => {
+      if (!window.confirm(`Apagar a lista de espera de "${g.name}"? Faça isso depois de avisar os clientes.`)) return;
+      try { await api(`/api/admin/alerts?product_id=${g.product_id}`, { method: "DELETE" }); await loadAlerts(); } catch (error) { setMessage(alertsFeedback, error.message, true); }
+    });
+    actions.append(copy, mail, done);
+    card.append(head, list, actions); alertsBox.append(card);
+  });
+}
+
 // ---------- Categorias ----------
 const categoryForm = document.querySelector("#category-form");
 const categoryList = document.querySelector("#category-list");
@@ -864,7 +991,7 @@ categoryForm.addEventListener("submit", async (event) => {
 });
 
 // ---------- Abas do painel ----------
-const TABS = ["produtos", "categorias", "frete", "pedidos", "avaliacoes", "atendimento"];
+const TABS = ["produtos", "categorias", "frete", "pedidos", "avaliacoes", "aviseme", "configuracoes", "atendimento"];
 const tabButtons = [...document.querySelectorAll(".admin-tab")];
 function showTab(name, { updateHash = true } = {}) {
   if (!TABS.includes(name)) name = "produtos";

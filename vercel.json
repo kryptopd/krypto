@@ -5,6 +5,9 @@
     }
   },
   "rewrites": [
+    { "source": "/produto/:slug", "destination": "/api/index?path=page/product&slug=:slug" },
+    { "source": "/sitemap.xml", "destination": "/api/index?path=page/sitemap" },
+    { "source": "/robots.txt", "destination": "/api/index?path=page/robots" },
     {
       "source": "/api/:path*",
       "destination": "/api/index?path=:path*"

@@ -9,7 +9,8 @@ function publicOrder(row) {
     subtotal_cents: row.subtotal_cents, shipping_cents: row.shipping_cents, total_cents: row.total_cents,
     created_at: row.created_at, tracking_code: row.tracking_code, shipping_provider: row.shipping_provider,
     payment_method: row.payment_method || "mercadopago",
-    items: (Array.isArray(row.items) ? row.items : []).map((i) => ({ name: i.name, quantity: i.quantity, size: i.size || "", color: i.color || "" }))
+    discount_cents: row.discount_cents || 0,
+    items: (Array.isArray(row.items) ? row.items : []).map((i) => ({ product_id: i.product_id, name: i.name, quantity: i.quantity, unit_price_cents: i.unit_price_cents, size: i.size || "", color: i.color || "" }))
   };
   if (result.payment_method === "pix" && result.status === "aguardando_pagamento" && result.payment_status === "pending") {
     const pix = pixConfig();
@@ -30,7 +31,7 @@ module.exports = async function handler(req, res) {
   if (!/^[A-F0-9]{8,16}$/.test(publicId)) return res.status(400).json({ detail: "Código de pedido inválido." });
   try {
     const supabase = getSupabase();
-    let { data, error } = await supabase.from("orders").select(`${BASE_COLUMNS},payment_method`).eq("public_id", publicId).maybeSingle();
+    let { data, error } = await supabase.from("orders").select(`${BASE_COLUMNS},payment_method,discount_cents`).eq("public_id", publicId).maybeSingle();
     // 42703 = coluna inexistente: banco ainda sem a migração do PIX; segue como pedido Mercado Pago.
     if (error && error.code === "42703") {
       ({ data, error } = await supabase.from("orders").select(BASE_COLUMNS).eq("public_id", publicId).maybeSingle());

@@ -53,6 +53,93 @@
   // A linha da sacola só é válida se a cor ainda existir na peça.
   const lineColorOk = (product, line) => !product || colorsOf(product).length === 0 ? !line.color : colorsOf(product).some((c) => c.name === line.color);
 
+  // ---------- Estoque por variação (cor x tamanho) ----------
+  const variantsOf = (product) => (product && Array.isArray(product.variants) ? product.variants : []);
+  // Unidades da combinação; sem variações cadastradas vale o estoque total da peça.
+  function stockFor(product, color, size) {
+    const v = variantsOf(product);
+    if (!v.length) return Number(product.stock) || 0;
+    const hit = v.find((x) => (x.color || "") === (color || "") && (x.size || "") === (size || ""));
+    return hit ? Number(hit.stock) || 0 : 0;
+  }
+  // Unidades de uma cor somando todos os tamanhos.
+  function colorStock(product, color) {
+    const v = variantsOf(product);
+    if (!v.length) return Number(product.stock) || 0;
+    return v.filter((x) => (x.color || "") === (color || "")).reduce((n, x) => n + (Number(x.stock) || 0), 0);
+  }
+  // Quantas unidades essa linha da sacola ainda pode ter (considera as outras linhas da mesma peça quando o estoque é compartilhado).
+  function maxQty(product, line) {
+    if (!product) return 0;
+    if (variantsOf(product).length) return stockFor(product, line.color, line.size);
+    const others = readCart().filter((l) => l.product_id === product.id && !((l.size || "") === (line.size || "") && (l.color || "") === (line.color || ""))).reduce((n, l) => n + l.quantity, 0);
+    return Math.max(0, (Number(product.stock) || 0) - others);
+  }
+  const slugify = (name) => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "peca";
+  const productPath = (p) => `/produto/${p.id}-${slugify(p.name)}`;
+
+  // ---------- Configurações públicas, análise (com consentimento) e eventos ----------
+  let configPromise = null;
+  function loadConfig() {
+    if (!configPromise) configPromise = fetch("/api/config").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((c) => ({ pix_discount_percent: Number(c.pix_discount_percent) || 0, ga_id: c.ga_id || "", pixel_id: c.pixel_id || "" }));
+    return configPromise;
+  }
+  const CONSENT_KEY = "krypto-consent-v1";
+  const readConsent = () => { try { return localStorage.getItem(CONSENT_KEY); } catch (_) { return null; } };
+  let trackersOn = false;
+  function startTrackers(cfg) {
+    if (trackersOn) return; trackersOn = true;
+    if (cfg.ga_id) {
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag("js", new Date()); window.gtag("config", cfg.ga_id);
+      const s = document.createElement("script"); s.async = true; s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(cfg.ga_id)}`; document.head.append(s);
+    }
+    if (cfg.pixel_id) {
+      /* eslint-disable */
+      !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = "2.0"; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s); }(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+      window.fbq("init", cfg.pixel_id); window.fbq("track", "PageView");
+    }
+    (pendingEvents.splice(0)).forEach(([name, data]) => send(name, data));
+  }
+  const pendingEvents = [];
+  function send(name, d) {
+    const items = (d.items || []).map((i) => ({ item_id: String(i.id), item_name: i.name, price: i.price, quantity: i.quantity || 1, item_variant: i.variant || undefined }));
+    if (window.gtag) {
+      const map = { view_item: "view_item", add_to_cart: "add_to_cart", begin_checkout: "begin_checkout", purchase: "purchase" };
+      window.gtag("event", map[name] || name, { currency: "BRL", value: d.value, transaction_id: d.transaction_id, items });
+    }
+    if (window.fbq) {
+      const map = { view_item: "ViewContent", add_to_cart: "AddToCart", begin_checkout: "InitiateCheckout", purchase: "Purchase" };
+      if (map[name]) window.fbq("track", map[name], { currency: "BRL", value: d.value, content_type: "product", content_ids: (d.items || []).map((i) => String(i.id)), num_items: (d.items || []).reduce((n, i) => n + (i.quantity || 1), 0) });
+    }
+  }
+  // Evento de loja: só dispara se a pessoa aceitou os cookies de análise e o painel tem os códigos configurados.
+  function track(name, data) {
+    if (readConsent() !== "granted") return;
+    if (!trackersOn) { pendingEvents.push([name, data || {}]); return; }
+    send(name, data || {});
+  }
+  function initConsent() {
+    loadConfig().then((cfg) => {
+      if (!cfg.ga_id && !cfg.pixel_id) return;
+      const choice = readConsent();
+      if (choice === "granted") { startTrackers(cfg); return; }
+      if (choice === "denied") return;
+      const bar = document.createElement("div");
+      bar.className = "consent-bar"; bar.setAttribute("role", "dialog"); bar.setAttribute("aria-label", "Cookies e privacidade");
+      const p = document.createElement("p");
+      p.append("Usamos cookies de análise e publicidade para entender o uso da loja e melhorar sua experiência. Veja a ");
+      const a = document.createElement("a"); a.href = "/privacidade.html"; a.textContent = "Política de Privacidade"; p.append(a, ".");
+      const accept = document.createElement("button"); accept.type = "button"; accept.className = "button button-light"; accept.textContent = "Aceitar";
+      const deny = document.createElement("button"); deny.type = "button"; deny.className = "button button-ghost"; deny.textContent = "Recusar";
+      const decide = (value) => { try { localStorage.setItem(CONSENT_KEY, value); } catch (_) {} bar.remove(); if (value === "granted") startTrackers(cfg); };
+      accept.addEventListener("click", () => decide("granted")); deny.addEventListener("click", () => decide("denied"));
+      const row = document.createElement("div"); row.className = "consent-actions"; row.append(deny, accept);
+      bar.append(p, row); document.body.append(bar);
+    });
+  }
+
   // ---------- Catálogo ----------
   let productsPromise = null;
   function loadProducts(force) {
@@ -119,7 +206,7 @@
   window.addEventListener("krypto:cart", refreshBadge);
   window.addEventListener("storage", (e) => { if (e.key === CART_KEY) refreshBadge(); });
   window.addEventListener("krypto:orders", refreshAccount);
-document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); });
+document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); initConsent(); });
 
-  window.Krypto = { colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
+  window.Krypto = { variantsOf, stockFor, colorStock, maxQty, productPath, loadConfig, track, colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
 })();

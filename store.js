@@ -1,4 +1,6 @@
-const { money, Cart, colorsOf, imagesFor, coverFor, lineColorOk } = window.Krypto;
+const { money, Cart, colorsOf, imagesFor, coverFor, lineColorOk, productPath, maxQty } = window.Krypto;
+let pixDiscountPercent = 0;
+window.Krypto.loadConfig().then((c) => { pixDiscountPercent = c.pix_discount_percent; if (products.length) renderProducts(); });
 const productGrid = document.querySelector("#product-grid");
 const mainNav = document.querySelector("#main-nav");
 const categoryRow = document.querySelector("#category-row");
@@ -45,12 +47,7 @@ const el = (tag, text, className) => {
 const productById = (id) => products.find((p) => p.id === id);
 const normalizeText = (v) => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-function toast(message) {
-  const box = document.querySelector("#toast");
-  box.textContent = message; box.hidden = false;
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { box.hidden = true; }, 2600);
-}
+const toast = (message, action) => window.Krypto.toast(message, action);
 
 // ---------- Vitrine ----------
 function visibleProducts() {
@@ -68,7 +65,7 @@ function visibleProducts() {
 }
 
 // Galeria da peça: rolagem lateral com encaixe (arrastar no celular), setas e bolinhas. Até 4 fotos.
-function gallery(product, urls) {
+function gallery(product, urls, href) {
   const box = el("div", undefined, "product-image product-gallery");
   box.setAttribute("role", "group");
   box.setAttribute("aria-label", urls.length > 1 ? `Fotos de ${product.name}` : product.name);
@@ -80,6 +77,8 @@ function gallery(product, urls) {
     track.append(img);
   });
   box.append(track);
+  // Clicar na foto abre a página da peça (arrastar para trocar de foto não gera clique).
+  if (href) { box.classList.add("is-link"); track.addEventListener("click", () => location.assign(href)); }
   if (urls.length < 2) return box;
 
   const dots = el("div", undefined, "gallery-dots");
@@ -105,16 +104,17 @@ function gallery(product, urls) {
 function productCard(product) {
   const soldOut = Number(product.stock) < 1;
   const card = el("article", undefined, soldOut ? "product-card sold-out" : "product-card");
+  const href = productPath(product);
   const colors = colorsOf(product);
-  let chosenSize = product.sizes.length === 1 ? product.sizes[0] : "";
   let chosenColor = colors.length ? colors[0].name : "";
 
   const buildImage = () => {
-    const image = gallery(product, imagesFor(product, chosenColor));
+    const image = gallery(product, imagesFor(product, chosenColor), href);
     const favorite = el("button", isFavorite(product.id) ? "♥" : "♡", "product-favorite");
     favorite.type = "button"; favorite.setAttribute("aria-label", isFavorite(product.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"); favorite.setAttribute("aria-pressed", String(isFavorite(product.id)));
     favorite.addEventListener("click", () => toggleFavorite(product.id));
     image.append(favorite);
+    image.append(window.Krypto.quickAdd(product, () => chosenColor).root);
     if (soldOut) image.append(el("span", "ESGOTADO", "product-tag product-tag-sold"));
     else if (Number(product.stock) <= 3) image.append(el("span", "ÚLTIMAS UNIDADES", "product-tag product-tag-low"));
     return image;
@@ -124,64 +124,17 @@ function productCard(product) {
   const info = el("div", undefined, "product-info");
   const text = el("div");
   if (product.category) text.append(el("span", product.category.toUpperCase(), "product-category"));
-  text.append(el("h3", product.name));
+  const title = el("h3"); const link = el("a", product.name); link.href = href; title.append(link);
+  text.append(title);
   if (product.description) text.append(el("p", product.description, "product-desc"));
   info.append(text, el("strong", money(product.price_cents), "product-price"));
+  if (pixDiscountPercent > 0) info.append(el("small", `${money(Math.round(product.price_cents * (1 - pixDiscountPercent / 100)))} no PIX (${String(pixDiscountPercent).replace(".", ",")}% off)`, "product-pix"));
 
   const buy = el("div", undefined, "product-buy");
-  const message = el("p", "", "product-msg");
-  message.setAttribute("role", "status");
-
-  // Cores: trocar a cor troca as fotos do cartão.
-  if (colors.length) {
-    const box = el("div", undefined, "color-picker");
-    const label = el("span", undefined, "color-label");
-    const setLabel = () => { label.replaceChildren(el("em", "Cor: "), document.createTextNode(chosenColor)); };
-    setLabel();
-    const swatches = el("div", undefined, "swatches");
-    swatches.setAttribute("role", "group"); swatches.setAttribute("aria-label", `Cor de ${product.name}`);
-    colors.forEach((color) => {
-      const dot = el("button", undefined, "swatch");
-      dot.type = "button"; dot.style.setProperty("--swatch", color.hex);
-      dot.title = color.name; dot.setAttribute("aria-label", color.name); dot.setAttribute("aria-pressed", String(color.name === chosenColor));
-      dot.addEventListener("click", () => {
-        if (chosenColor === color.name) return;
-        chosenColor = color.name; message.textContent = ""; delete message.dataset.error;
-        swatches.querySelectorAll(".swatch").forEach((n) => n.setAttribute("aria-pressed", String(n === dot)));
-        setLabel();
-        const next = buildImage(); image.replaceWith(next); image = next;
-      });
-      swatches.append(dot);
-    });
-    box.append(label, swatches);
-    buy.append(box);
-  }
-
-  if (!soldOut && product.sizes.length) {
-    const sizes = el("div", undefined, "size-picker");
-    sizes.setAttribute("role", "group"); sizes.setAttribute("aria-label", `Tamanho de ${product.name}`);
-    product.sizes.forEach((size) => {
-      const chip = el("button", size, "size-chip");
-      chip.type = "button"; chip.setAttribute("aria-pressed", String(size === chosenSize));
-      chip.addEventListener("click", () => {
-        chosenSize = size; message.textContent = "";
-        sizes.querySelectorAll(".size-chip").forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
-      });
-      sizes.append(chip);
-    });
-    buy.append(sizes);
-  }
-  const add = el("button", soldOut ? "Sem estoque" : "Adicionar à sacola", "button button-primary add-to-cart");
-  add.type = "button"; add.disabled = soldOut;
-  add.addEventListener("click", () => {
-    if (product.sizes.length && !chosenSize) { message.textContent = "Escolha um tamanho."; message.dataset.error = "true"; return; }
-    const inBag = Cart.lines().filter((l) => l.product_id === product.id).reduce((n, l) => n + l.quantity, 0);
-    if (inBag >= product.stock) { message.textContent = "Você já tem todo o estoque disponível na sacola."; message.dataset.error = "true"; return; }
-    Cart.add(product.id, chosenSize, 1, product.stock - inBag + (Cart.lines().find((l) => l.product_id === product.id && l.size === chosenSize && (l.color || "") === chosenColor)?.quantity || 0), chosenColor);
-    message.textContent = ""; delete message.dataset.error;
-    toast(`${product.name}${chosenColor ? ` (${chosenColor})` : ""} foi para a sacola.`);
-  });
-  buy.append(message, add);
+  buy.append(window.Krypto.purchasePanel(product, {
+    compact: true,
+    onColor: (name) => { chosenColor = name; const next = buildImage(); image.replaceWith(next); image = next; }
+  }).root);
   card.append(image, info, buy);
   return card;
 }
@@ -282,18 +235,17 @@ function renderDrawer() {
     const thumb = el("div", undefined, "bag-thumb");
     if (product) thumb.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
     const body = el("div", undefined, "bag-info");
-    if (!product || product.stock < 1 || !lineColorOk(product, line)) {
+    if (!product || maxQty(product, line) < 1 || !lineColorOk(product, line)) {
       blocked = true;
-      body.append(el("strong", product ? product.name : "Produto indisponível"), el("small", product && product.stock >= 1 ? "Esta cor não está mais disponível. Remova para continuar." : "Sem estoque. Remova para continuar.", "bag-warn"));
+      body.append(el("strong", product ? product.name : "Produto indisponível"), el("small", product && !lineColorOk(product, line) ? "Esta cor não está mais disponível. Remova para continuar." : "Sem estoque. Remova para continuar.", "bag-warn"));
     } else {
-      const qty = Math.min(line.quantity, product.stock, 10);
+      const limit = maxQty(product, line), qty = Math.min(line.quantity, limit, 10);
       subtotal += product.price_cents * qty;
       body.append(el("strong", product.name), el("small", [line.color, line.size ? `Tamanho ${line.size}` : ""].filter(Boolean).join(" · ") || product.category || ""));
       const stepper = el("div", undefined, "stepper");
       const minus = el("button", "−"); minus.type = "button"; minus.setAttribute("aria-label", "Diminuir quantidade");
       const plus = el("button", "+"); plus.type = "button"; plus.setAttribute("aria-label", "Aumentar quantidade");
-      const total = Cart.lines().filter((l) => l.product_id === product.id).reduce((n, l) => n + l.quantity, 0);
-      plus.disabled = qty >= 10 || total >= product.stock;
+      plus.disabled = qty >= 10 || qty >= limit;
       minus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, qty - 1, line.color));
       plus.addEventListener("click", () => Cart.setQuantity(line.product_id, line.size, qty + 1, line.color));
       stepper.append(minus, el("span", String(qty)), plus);
@@ -301,7 +253,7 @@ function renderDrawer() {
       if (qty !== line.quantity) Cart.setQuantity(line.product_id, line.size, qty, line.color);
     }
     const side = el("div", undefined, "bag-side");
-    if (product) side.append(el("strong", money(product.price_cents * Math.min(line.quantity, product.stock || line.quantity))));
+    if (product) side.append(el("strong", money(product.price_cents * Math.min(line.quantity, maxQty(product, line) || line.quantity))));
     const remove = el("button", "Remover", "bag-remove"); remove.type = "button";
     remove.addEventListener("click", () => Cart.remove(line.product_id, line.size, line.color));
     side.append(remove);

@@ -12,15 +12,17 @@ module.exports = async function handler(req, res) {
       if (error) throw error;
       return res.status(200).json(data || []);
     }
-    const columns = "id,name,category,price_cents,stock,sizes,image_url,images,colors,description,active";
-    let { data, error } = await supabase.from("products").select(columns).eq("active", true).order("created_at", { ascending: false });
-    // Banco ainda sem a migração das cores: a vitrine abre normalmente, sem cores.
-    if (error && ["42703", "PGRST204"].includes(error.code)) {
-      ({ data, error } = await supabase.from("products").select("id,name,category,price_cents,stock,sizes,image_url,images,description,active").eq("active", true).order("created_at", { ascending: false }));
-    }
-    // Banco ainda sem a migração das fotos: a vitrine continua abrindo com a foto única.
-    if (error && ["42703", "PGRST204"].includes(error.code)) {
-      ({ data, error } = await supabase.from("products").select("id,name,category,price_cents,stock,sizes,image_url,description,active").eq("active", true).order("created_at", { ascending: false }));
+    // Tenta o conjunto completo de colunas e recua se o banco ainda não recebeu alguma migração.
+    const sets = [
+      "id,name,category,price_cents,stock,sizes,image_url,images,colors,variants,description,active,created_at",
+      "id,name,category,price_cents,stock,sizes,image_url,images,colors,description,active,created_at",
+      "id,name,category,price_cents,stock,sizes,image_url,images,description,active",
+      "id,name,category,price_cents,stock,sizes,image_url,description,active"
+    ];
+    let data = null, error = null;
+    for (const columns of sets) {
+      ({ data, error } = await supabase.from("products").select(columns).eq("active", true).order("created_at", { ascending: false }));
+      if (!error || !["42703", "PGRST204"].includes(error.code)) break;
     }
     if (error) throw error;
     return res.status(200).json(data || []);
