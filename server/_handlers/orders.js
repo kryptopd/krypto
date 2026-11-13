@@ -2,6 +2,7 @@ const { getSupabase, sendError, requireMethod, getSiteUrl, pixConfig } = require
 const { buildPixPayload } = require('../_lib/pix');
 const S = require('../_lib/shipping');
 const { readStoreSettings, findCoupon } = require('../_lib/settings');
+const Push = require('../_lib/push');
 
 function validEmail(value) {
   return typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -115,6 +116,13 @@ module.exports = async function handler(req, res) {
         return res.status(503).json({ detail: "O pagamento por PIX está sendo configurado. Tente novamente em instantes ou escolha outra forma de pagamento." });
       }
       createdPublicId = null;
+      // Avisa o administrador (notificação do sistema): há um PIX para conferir e confirmar.
+      const qty = (order.order_items || []).reduce((n, l) => n + Number(l.quantity || 0), 0);
+      await Push.withTimeout(Push.notifyAdmins(supabase, Push.subject(req), {
+        title: `Novo pedido PIX · ${Push.money(order.total_cents)}`,
+        body: `#${order.public_id} · ${qty} ${qty === 1 ? "peça" : "peças"} · aguardando você confirmar o pagamento`,
+        url: "/admin.html#pedidos", tag: `pedido-${order.public_id}`
+      }));
       const pix = pixSettings;
       res.setHeader("Cache-Control", "no-store");
       return res.status(201).json({

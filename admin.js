@@ -484,7 +484,7 @@ async function loadDashboard() {
   renderCategories(data.categories_error);
   renderOrders(data.orders);
   renderShipping(data.shipping, data.shipping_error);
-  await Promise.all([loadReviews(), loadSupport(), loadSettings(), loadAlerts()]);
+  await Promise.all([loadReviews(), loadSupport(), loadSettings(), loadAlerts(), refreshPushUI()]);
 }
 
 async function tryLogin(email, password) {
@@ -868,6 +868,62 @@ photoInput.addEventListener("change", async () => {
   await Promise.all(files.slice(0, Math.max(0, room)).map((f) => uploadFile(color, f)));
 });
 resetColors();
+
+// ---------- Notificações do sistema (novos pedidos) ----------
+const pushStatus = document.querySelector("#push-status"), pushHelp = document.querySelector("#push-help");
+const pushEnable = document.querySelector("#push-enable"), pushTest = document.querySelector("#push-test"), pushDisable = document.querySelector("#push-disable");
+const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const urlBase64ToBytes = (b64) => { const pad = "=".repeat((4 - (b64.length % 4)) % 4); const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
+const deviceLabel = () => `${/Android/.test(navigator.userAgent) ? "Android" : isIos ? "iPhone/iPad" : /Mac/.test(navigator.platform) ? "Mac" : /Win/.test(navigator.platform) ? "Windows" : "Computador"} · ${/Edg\//.test(navigator.userAgent) ? "Edge" : /Chrome\//.test(navigator.userAgent) ? "Chrome" : /Firefox\//.test(navigator.userAgent) ? "Firefox" : "Safari"}`;
+async function currentPushSubscription() {
+  const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+async function refreshPushUI() {
+  [pushEnable, pushTest, pushDisable].forEach((b) => { b.hidden = true; });
+  if (!pushSupported) {
+    pushStatus.textContent = isIos && !isStandalone ? "No iPhone, primeiro toque em Compartilhar → Adicionar à Tela de Início e abra o painel por esse ícone." : "Este navegador não suporta notificações do sistema.";
+    return;
+  }
+  if (Notification.permission === "denied") { pushStatus.textContent = "As notificações estão bloqueadas neste navegador. Libere nas permissões do site (cadeado ao lado do endereço) e recarregue."; return; }
+  try {
+    const sub = await currentPushSubscription();
+    if (sub) { pushStatus.textContent = "✓ Ativadas neste aparelho."; pushTest.hidden = false; pushDisable.hidden = false; }
+    else { pushStatus.textContent = "Desativadas neste aparelho."; pushEnable.hidden = false; }
+  } catch (error) { pushStatus.textContent = error.message; }
+}
+pushEnable.addEventListener("click", async () => {
+  pushEnable.disabled = true; pushStatus.textContent = "Ativando…";
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error("Você não permitiu as notificações. Toque em \"Permitir\" quando o navegador perguntar.");
+    const { public_key: key } = await api("/api/admin/push");
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    const old = await reg.pushManager.getSubscription(); if (old) await old.unsubscribe();   // chave antiga (se mudou)
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToBytes(key) });
+    await api("/api/admin/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subscription: sub.toJSON(), label: deviceLabel() }) });
+    setMessage(pushHelp, "Pronto! Clique em “Enviar teste” para ver como chega.");
+  } catch (error) { setMessage(pushHelp, error.message || "Não foi possível ativar as notificações.", true); }
+  finally { pushEnable.disabled = false; await refreshPushUI(); }
+});
+pushTest.addEventListener("click", async () => {
+  pushTest.disabled = true;
+  try { const r = await api("/api/admin/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "test" }) }); setMessage(pushHelp, r.sent ? "Teste enviado. Deve aparecer em instantes." : "Não consegui enviar. Desative e ative de novo.", !r.sent); }
+  catch (error) { setMessage(pushHelp, error.message, true); }
+  finally { pushTest.disabled = false; }
+});
+pushDisable.addEventListener("click", async () => {
+  pushDisable.disabled = true;
+  try {
+    const sub = await currentPushSubscription();
+    if (sub) { await api("/api/admin/push", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+    setMessage(pushHelp, "Notificações desativadas neste aparelho.");
+  } catch (error) { setMessage(pushHelp, error.message, true); }
+  finally { pushDisable.disabled = false; await refreshPushUI(); }
+});
 
 // ---------- Configurações da loja ----------
 const settingsForm = document.querySelector("#settings-form");

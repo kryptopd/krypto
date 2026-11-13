@@ -1452,3 +1452,10 @@ input::placeholder, textarea::placeholder { color: #8f8a96; }
 .coupon-form .button { min-height: 44px; padding: 0 16px; }
 .coupon-note { min-height: 1.2em; margin: 0 0 8px; color: #7ddba0; font-size: 12.5px; }
 .coupon-note[data-error="true"] { color: #ff9b9b; }
+
+/* Admin: notificações de pedidos */
+.push-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin: 0 0 22px; padding: 18px; border: 1px solid #3b2a52; background: linear-gradient(110deg, rgba(168,85,247,.12), rgba(14,13,18,.9)); }
+.push-text strong { font: 700 16px var(--font-display); }
+.push-text p { margin: 6px 0 4px; color: #d7d2dd; font-size: 14px; }
+.push-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.push-actions .button { min-height: 44px; }

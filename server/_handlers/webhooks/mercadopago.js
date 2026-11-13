@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { getSupabase, sendError, requireMethod } = require('../../_lib/supabase');
+const Push = require('../../_lib/push');
 
 function validSignature(req, dataId) {
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
@@ -33,6 +34,12 @@ module.exports = async function handler(req, res) {
     const statusMap = { approved: "approved", rejected: "rejected", cancelled: "cancelled", refunded: "refunded", charged_back: "charged_back", in_process: "pending", pending: "pending" };
     const mapped = statusMap[payment.status] || "pending";
     const amountCents = Math.round(Number(payment.transaction_amount || 0) * 100);
+    // Estado anterior: só avisa o administrador na primeira vez que o pagamento aparece como aprovado.
+    let wasApproved = false;
+    try {
+      const { data: before } = await getSupabase().from("orders").select("payment_status").eq("public_id", String(payment.external_reference)).maybeSingle();
+      wasApproved = Boolean(before && before.payment_status === "approved");
+    } catch (_) {}
     const { data, error } = await getSupabase().rpc("apply_krypto_payment", {
       p_public_id: String(payment.external_reference),
       p_payment_id: String(payment.id),
@@ -41,6 +48,13 @@ module.exports = async function handler(req, res) {
     });
     if (error) throw error;
     const result = Array.isArray(data) ? data[0] : data;
+    if (mapped === "approved" && !wasApproved && result && !result.refund_required) {
+      await Push.withTimeout(Push.notifyAdmins(getSupabase(), Push.subject(req), {
+        title: `Pagamento aprovado · ${Push.money(amountCents)}`,
+        body: `Pedido #${String(payment.external_reference)} foi pago no cartão e já pode ser preparado.`,
+        url: "/admin.html#pedidos", tag: `pago-${String(payment.external_reference)}`
+      }));
+    }
     if (result && result.refund_required && mapped === "approved") {
       const refund = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(payment.id)}/refunds`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Idempotency-Key": `krypto-late-refund-${payment.id}` }, body: "{}"

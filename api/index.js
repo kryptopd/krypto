@@ -7,6 +7,7 @@ const handlers = {
   adminProducts: require("../server/_handlers/admin/products"),
   adminSettings: require("../server/_handlers/admin/settings"),
   adminAlerts: require("../server/_handlers/admin/alerts"),
+  adminPush: require("../server/_handlers/admin/push"),
   config: require("../server/_handlers/config"),
   coupon: require("../server/_handlers/coupon"),
   stockAlert: require("../server/_handlers/stock-alert"),
@@ -70,6 +71,7 @@ module.exports = async function handler(req, res) {
   else if (route === "admin/support") target = handlers.adminSupport;
   else if (route === "admin/settings") target = handlers.adminSettings;
   else if (route === "admin/alerts") target = handlers.adminAlerts;
+  else if (route === "admin/push") target = handlers.adminPush;
   else if (segments.length === 3 && segments[0] === "admin" && segments[1] === "orders" && ["PATCH", "DELETE"].includes(method)) {
     req.query.id = segments[2]; target = handlers.adminOrder;
   }

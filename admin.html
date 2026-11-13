@@ -184,7 +184,7 @@
     <div class="admin-tab-panel" role="tabpanel" id="panel-pedidos" aria-labelledby="tab-pedidos" data-panel="pedidos" hidden>
     <section class="admin-panel orders-panel">
       <div class="panel-heading"><div><span class="panel-kicker">ACOMPANHAMENTO</span><h2>Pedidos recentes</h2></div><span class="panel-count" id="orders-count">0 PEDIDOS</span></div>
-      <p class="privacy-note">Pedidos criados no checkout aparecem aqui. Os dados pessoais só podem ser acessados por este painel autenticado.</p>
+      <p class="privacy-note">Quer ser avisado quando entrar pedido? Ative as notificações em <a href="#configuracoes" class="inline-link">Configurações</a>. Pedidos criados no checkout aparecem aqui. Os dados pessoais só podem ser acessados por este painel autenticado.</p>
       <p class="form-note" id="orders-feedback" role="status" aria-live="polite"></p>
       <div class="table-wrap">
         <table class="orders-table">
@@ -222,6 +222,18 @@
     <div class="admin-tab-panel" role="tabpanel" id="panel-configuracoes" data-panel="configuracoes" aria-labelledby="tab-configuracoes" hidden>
       <section class="admin-panel">
         <div class="panel-heading"><div><span class="panel-kicker">LOJA</span><h2>Configurações</h2><p class="panel-description">Descontos e cupons, contato, dados da empresa, banner da home e medição de visitas.</p></div></div>
+        <div class="push-card" id="push-card">
+          <div class="push-text">
+            <strong>🔔 Notificações de pedidos</strong>
+            <p id="push-status">Verificando…</p>
+            <small class="field-help" id="push-help">Receba um aviso do sistema neste aparelho quando entrar um pedido PIX para confirmar ou um pagamento no cartão for aprovado.</small>
+          </div>
+          <div class="push-actions">
+            <button class="button button-primary" type="button" id="push-enable" hidden>Ativar neste aparelho</button>
+            <button class="button button-outline" type="button" id="push-test" hidden>Enviar teste</button>
+            <button class="button button-outline" type="button" id="push-disable" hidden>Desativar</button>
+          </div>
+        </div>
         <form id="settings-form" novalidate>
           <fieldset class="settings-block">
             <legend>Desconto e cupons</legend>
