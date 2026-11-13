@@ -179,7 +179,23 @@
     return { root, color: () => color, size: () => size };
   }
 
+  // Cartão compacto (carrossel de lançamentos, "peças parecidas"): foto, nome, preço e, se houver, preço no PIX.
+  function miniCard(product, pixPercent) {
+    const a = el("a", undefined, "mini-card"); a.href = K.productPath(product);
+    const img = el("div", undefined, "mini-img");
+    img.style.backgroundImage = `url("${String(K.coverFor(product, (K.colorsOf(product)[0] || {}).name)).replace(/["\\]/g, "")}")`;
+    if (Number(product.stock) < 1) img.append(el("span", "ESGOTADO", "product-tag product-tag-sold"));
+    else if (Number(product.stock) <= 3) img.append(el("span", "ÚLTIMAS UNIDADES", "product-tag product-tag-low"));
+    a.append(img, el("strong", product.name), el("span", money(product.price_cents), "mini-price"));
+    if (pixPercent > 0) a.append(el("small", `${money(Math.round(product.price_cents * (1 - pixPercent / 100)))} no PIX`, "product-pix"));
+    const colors = K.colorsOf(product);
+    if (colors.length > 1) { const dots = el("span", undefined, "mini-dots"); colors.slice(0, 6).forEach((c) => { const d = el("i"); d.style.background = c.hex; d.title = c.name; dots.append(d); }); a.append(dots); }
+    return a;
+  }
+  const money = (c) => K.money(c);
+
   K.purchasePanel = purchasePanel;
+  K.miniCard = miniCard;
   K.quickAdd = quickAdd;
   K.addToBag = addToBag;
 })();

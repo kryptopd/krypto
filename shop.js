@@ -78,10 +78,13 @@
   const slugify = (name) => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "peca";
   const productPath = (p) => `/produto/${p.id}-${slugify(p.name)}`;
 
+  let shippingPromise = null;
+  const loadShippingInfo = () => (shippingPromise = shippingPromise || fetch("/api/shipping").then((r) => (r.ok ? r.json() : null)).catch(() => null));
+
   // ---------- Configurações públicas, análise (com consentimento) e eventos ----------
   let configPromise = null;
   function loadConfig() {
-    if (!configPromise) configPromise = fetch("/api/config").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((c) => ({ pix_discount_percent: Number(c.pix_discount_percent) || 0, ga_id: c.ga_id || "", pixel_id: c.pixel_id || "" }));
+    if (!configPromise) configPromise = fetch("/api/config").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((c) => ({ ...c, pix_discount_percent: Number(c.pix_discount_percent) || 0, ga_id: c.ga_id || "", pixel_id: c.pixel_id || "", whatsapp: c.whatsapp || "", whatsapp_message: c.whatsapp_message || "", instagram: c.instagram || "", email: c.email || "", legal_name: c.legal_name || "", cnpj: c.cnpj || "", address: c.address || "", banner: c.banner || null }));
     return configPromise;
   }
   const CONSENT_KEY = "krypto-consent-v1";
@@ -137,6 +140,85 @@
       accept.addEventListener("click", () => decide("granted")); deny.addEventListener("click", () => decide("denied"));
       const row = document.createElement("div"); row.className = "consent-actions"; row.append(deny, accept);
       bar.append(p, row); document.body.append(bar);
+    });
+  }
+
+  // ---------- Menu do celular ----------
+  const mk = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
+  let menuContact = null;
+  function initMenu() {
+    const openers = document.querySelectorAll("[data-menu-open]");
+    if (!openers.length) return;
+    const overlay = mk("div", undefined, "drawer-overlay menu-overlay"); overlay.hidden = true;
+    const panel = mk("aside", undefined, "menu-drawer"); panel.hidden = true;
+    panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true"); panel.setAttribute("aria-label", "Menu");
+    const head = mk("div", undefined, "drawer-head");
+    head.append(mk("h2", "Menu"));
+    const close = mk("button", "×", "drawer-close"); close.type = "button"; close.setAttribute("aria-label", "Fechar menu"); head.append(close);
+    const form = mk("form", undefined, "menu-search"); form.setAttribute("role", "search");
+    const input = mk("input"); input.type = "search"; input.placeholder = "Buscar peças"; input.setAttribute("aria-label", "Buscar peças"); input.autocomplete = "off";
+    form.append(input);
+    const list = mk("nav", undefined, "menu-links"); list.setAttribute("aria-label", "Categorias e páginas");
+    menuContact = mk("div", undefined, "menu-contact");
+    panel.append(head, form, list, menuContact);
+    document.body.append(overlay, panel);
+
+    let last = null;
+    const open = () => { last = document.activeElement; panel.hidden = false; overlay.hidden = false; document.body.classList.add("drawer-open"); input.focus(); };
+    const shut = () => { panel.hidden = true; overlay.hidden = true; document.body.classList.remove("drawer-open"); if (last && last.focus) last.focus(); };
+    openers.forEach((b) => b.addEventListener("click", open));
+    close.addEventListener("click", shut); overlay.addEventListener("click", shut);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) shut(); });
+    // Na home aplica sem recarregar; nas outras páginas navega para a home já filtrada.
+    const go = (filters) => {
+      shut();
+      if (window.Krypto.onHome) window.Krypto.onHome(filters);
+      else { const q = new URLSearchParams(); if (filters.category) q.set("categoria", filters.category); if (filters.query) q.set("q", filters.query); location.assign(`/${q.toString() ? `?${q}` : ""}#colecao`); }
+    };
+    form.addEventListener("submit", (e) => { e.preventDefault(); go({ query: input.value.trim() }); });
+    const link = (label, href, onClick) => { const a = mk("a", label); a.href = href; if (onClick) a.addEventListener("click", (e) => { e.preventDefault(); onClick(); }); else a.addEventListener("click", shut); return a; };
+    list.append(link("Todas as peças", "/#colecao", () => go({})));
+    const extra = mk("div", undefined, "menu-extra");
+    Promise.all([loadProducts().catch(() => []), fetch("/api/products?categories=1").then((r) => (r.ok ? r.json() : [])).catch(() => [])]).then(([products, cats]) => {
+      const used = new Set((products || []).map((p) => p.category).filter(Boolean));
+      (cats.length ? cats.map((c) => c.name) : [...used]).filter((n) => used.has(n)).forEach((name) => list.insertBefore(link(name, `/?categoria=${encodeURIComponent(name)}#colecao`, () => go({ category: name })), extra));
+    });
+    [["Meus pedidos", "/conta.html"], ["Avaliações", "/avaliacoes.html"], ["Atendimento", "/atendimento.html"], ["Trocas e devoluções", "/trocas-devolucoes.html"]].forEach(([l, h]) => extra.append(link(l, h)));
+    list.append(extra);
+  }
+
+  // ---------- Contato (WhatsApp, Instagram, dados da empresa) vindo do painel ----------
+  const waHref = (cfg) => `https://wa.me/${cfg.whatsapp}?text=${encodeURIComponent(cfg.whatsapp_message || "")}`;
+  const fmtPhone = (d) => { const n = d.replace(/^55/, ""); return n.length === 11 ? `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}` : n.length === 10 ? `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}` : `+${d}`; };
+  const safeHref = (u) => (/^https:\/\//i.test(u) ? u : "");
+  function contactLinks(cfg, cls) {
+    const out = [];
+    if (cfg.whatsapp) { const a = mk("a", `WhatsApp ${fmtPhone(cfg.whatsapp)}`, cls); a.href = waHref(cfg); a.target = "_blank"; a.rel = "noopener noreferrer"; out.push(a); }
+    if (cfg.instagram && safeHref(cfg.instagram)) { const a = mk("a", `Instagram ${cfg.instagram.replace(/^https:\/\/www\.instagram\.com\//, "@").replace(/\/$/, "")}`, cls); a.href = cfg.instagram; a.target = "_blank"; a.rel = "noopener noreferrer"; out.push(a); }
+    if (cfg.email) { const a = mk("a", cfg.email, cls); a.href = `mailto:${cfg.email}`; out.push(a); }
+    return out;
+  }
+  function initContact() {
+    loadConfig().then((cfg) => {
+      if (menuContact) menuContact.replaceChildren(...contactLinks(cfg, "menu-contact-link"));
+      if (cfg.whatsapp) {
+        const wa = mk("a", undefined, "wa-float"); wa.href = waHref(cfg); wa.target = "_blank"; wa.rel = "noopener noreferrer"; wa.setAttribute("aria-label", "Falar com a KRYPTO no WhatsApp");
+        wa.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.3-4.1A8 8 0 1 1 8.2 18.9L4 20Z"/><path d="M9 9.5c.2 2.2 2.3 4.3 4.5 4.5l1.3-1.2-1.8-.9-.8.5c-.8-.4-1.5-1.1-1.9-1.9l.5-.8-.9-1.8L9 9.5Z"/></svg><span>WhatsApp</span>';
+        document.body.append(wa);
+      }
+      const col = document.querySelector("#footer-contact");
+      const links = contactLinks(cfg, "");
+      if (col && links.length) col.replaceChildren(mk("strong", "FALE COM A KRYPTO"), ...links);
+      const foot = document.querySelector(".site-footer-expanded");
+      if (foot) {
+        const legal = [cfg.legal_name, cfg.cnpj ? `CNPJ ${cfg.cnpj}` : "", cfg.address].filter(Boolean).join(" · ");
+        const bar = mk("div", undefined, "footer-trust");
+        const pays = mk("div", undefined, "footer-pay"); pays.setAttribute("aria-label", "Formas de pagamento");
+        ["PIX", "Cartão de crédito", "Mercado Pago", "Compra segura"].forEach((t) => pays.append(mk("span", t)));
+        bar.append(pays);
+        if (legal) bar.append(mk("p", legal, "footer-legal"));
+        foot.querySelector(".footer-bottom").before(bar);
+      }
     });
   }
 
@@ -206,7 +288,7 @@
   window.addEventListener("krypto:cart", refreshBadge);
   window.addEventListener("storage", (e) => { if (e.key === CART_KEY) refreshBadge(); });
   window.addEventListener("krypto:orders", refreshAccount);
-document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); initConsent(); });
+document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); initConsent(); initMenu(); initContact(); });
 
-  window.Krypto = { variantsOf, stockFor, colorStock, maxQty, productPath, loadConfig, track, colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
+  window.Krypto = { loadShippingInfo, variantsOf, stockFor, colorStock, maxQty, productPath, loadConfig, track, colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
 })();

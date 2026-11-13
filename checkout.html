@@ -7,6 +7,7 @@
   <meta name="robots" content="noindex">
   <title>Finalizar compra — KRYPTO</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,7 +19,7 @@
       <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
       <span>KRYPTO<span class="brand-dot">.</span></span>
     </a>
-    <span class="checkout-step"><span>01</span> FINALIZAR COMPRA</span>
+    <ol class="steps" aria-label="Etapas da compra"><li class="done"><span>1</span> Sacola</li><li class="current" aria-current="step"><span>2</span> Entrega e pagamento</li><li><span>3</span> Confirmação</li></ol>
     <a class="admin-store-link" href="index.html">← Voltar para a loja</a>
   </header>
 
@@ -88,12 +89,24 @@
         <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
         <p class="form-note" id="checkout-feedback" role="status" aria-live="polite"></p>
         <button class="button button-primary submit-order" type="submit">Confirmar pedido <span aria-hidden="true">↗</span></button>
+        <ul class="trust-badges" aria-label="Garantias da compra">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 2.8 7.7 7 9.5 4.2-1.8 7-5.1 7-9.5V6l-7-3Zm-3 8.5 2.2 2.2L15.5 9"/></svg><span>Pagamento seguro</span></li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6v-9Z"/></svg><span>Dados protegidos (LGPD)</span></li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3L20 9m0-5v5h-5M20 12a8 8 0 0 1-14 5.3L4 15m0 5v-5h5"/></svg><a href="trocas-devolucoes.html" target="_blank" rel="noopener">Trocas e devoluções</a></li>
+        </ul>
       </form>
 
       <aside class="order-summary">
         <h2>Resumo do pedido <span id="summary-quantity">0 itens</span></h2>
         <div id="summary-items"></div>
+        <form class="coupon-form" id="coupon-form" novalidate>
+          <label class="sr-only" for="coupon-input">Cupom de desconto</label>
+          <input id="coupon-input" type="text" maxlength="20" placeholder="Cupom de desconto" autocomplete="off" autocapitalize="characters">
+          <button class="button button-outline" type="submit">Aplicar</button>
+        </form>
+        <p class="coupon-note" id="coupon-note" role="status" aria-live="polite"></p>
         <div class="summary-line"><span>Subtotal</span><span id="summary-subtotal"></span></div>
+        <div class="summary-line" id="summary-coupon-row" hidden><span>Cupom <small id="summary-coupon-code"></small></span><span id="summary-coupon"></span></div>
         <div class="summary-line" id="summary-discount-row" hidden><span>Desconto no PIX <small id="summary-discount-pct"></small></span><span id="summary-discount"></span></div>
         <div class="summary-line"><span>Frete <small id="summary-ship-detail"></small></span><span class="shipping-note" id="summary-shipping">Informe o endereço</span></div>
         <div class="summary-total"><span>Total do pedido</span><strong id="summary-total"></strong></div>

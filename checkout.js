@@ -1,6 +1,7 @@
 const K = window.Krypto;
 const { money, Cart, coverFor, lineColorOk, maxQty } = K;
 let pixPercent = 0;
+let couponCode = "", couponPercent = 0;
 const $ = (s) => document.querySelector(s);
 const form = $("#customer-form");
 const fields = form.elements;
@@ -86,14 +87,22 @@ function renderItems() {
   renderTotals(subtotal);
 }
 
-// Desconto do PIX: só para exibir. Quem calcula de verdade é o servidor ao criar o pedido.
-const pixDiscount = (subtotal) => (paymentMethod() === "pix" && pixPercent > 0 ? Math.round(subtotal * pixPercent / 100) : 0);
+// Descontos: só para exibir. Quem calcula de verdade é o servidor ao criar o pedido (PIX + cupom, no máximo 50%).
+function discounts(subtotal) {
+  const pix = paymentMethod() === "pix" ? pixPercent : 0;
+  const total = Math.round(subtotal * Math.min(50, pix + couponPercent) / 100);
+  const pixPart = Math.round(subtotal * pix / 100);
+  return { total, pix: Math.min(pixPart, total), coupon: total - Math.min(pixPart, total), pixPct: pix };
+}
 function renderTotals(subtotal) {
   if (subtotal === undefined) subtotal = lineState().reduce((n, st) => n + lineTotal(st), 0);
-  const discount = pixDiscount(subtotal), base = subtotal - discount;
-  $("#summary-discount-row").hidden = discount === 0;
-  $("#summary-discount").textContent = discount ? `− ${money(discount)}` : "";
-  $("#summary-discount-pct").textContent = discount ? `(${String(pixPercent).replace(".", ",")}%)` : "";
+  const d = discounts(subtotal), base = subtotal - d.total;
+  $("#summary-discount-row").hidden = d.pix === 0;
+  $("#summary-discount").textContent = d.pix ? `− ${money(d.pix)}` : "";
+  $("#summary-discount-pct").textContent = d.pix ? `(${String(d.pixPct).replace(".", ",")}%)` : "";
+  $("#summary-coupon-row").hidden = d.coupon === 0;
+  $("#summary-coupon").textContent = d.coupon ? `− ${money(d.coupon)}` : "";
+  $("#summary-coupon-code").textContent = couponCode ? `(${couponCode} · ${String(couponPercent).replace(".", ",")}%)` : "";
   const shipEl = $("#summary-shipping"), detail = $("#summary-ship-detail");
   detail.textContent = "";
   if (!confirmed) { shipEl.textContent = "Informe o endereço"; $("#summary-total").textContent = money(base); return; }
@@ -105,6 +114,33 @@ function renderTotals(subtotal) {
   detail.textContent = `(${parts.join(" · ")})`;
   $("#summary-total").textContent = money(base + quote.shipping_cents);
 }
+
+// ---------- Cupom ----------
+const couponForm = $("#coupon-form"), couponInput = $("#coupon-input"), couponNote = $("#coupon-note");
+function setCouponNote(text, bad) { couponNote.textContent = text; couponNote.dataset.error = bad ? "true" : "false"; }
+function showCoupon() {
+  const applied = Boolean(couponCode);
+  couponInput.disabled = applied; couponInput.value = couponCode;
+  couponForm.querySelector("button").textContent = applied ? "Remover" : "Aplicar";
+  setCouponNote(applied ? `Cupom ${couponCode} aplicado: ${String(couponPercent).replace(".", ",")}% de desconto.` : "", false);
+  renderTotals();
+}
+couponForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (couponCode) { couponCode = ""; couponPercent = 0; try { sessionStorage.removeItem("krypto-coupon"); } catch (_) {} showCoupon(); return; }
+  const code = couponInput.value.trim().toUpperCase().replace(/\s+/g, "");
+  if (!code) return setCouponNote("Digite o código do cupom.", true);
+  const button = couponForm.querySelector("button"); button.disabled = true; setCouponNote("Conferindo…", false);
+  try {
+    const r = await fetch(`/api/coupon?code=${encodeURIComponent(code)}`, { cache: "no-store" });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.valid) throw new Error(data.detail || "Cupom inválido ou expirado.");
+    couponCode = data.code; couponPercent = data.percent;
+    try { sessionStorage.setItem("krypto-coupon", couponCode); } catch (_) {}
+    showCoupon();
+  } catch (error) { setCouponNote(error.message, true); }
+  finally { button.disabled = false; }
+});
 
 // ---------- Frete (calculado no servidor) ----------
 async function refreshQuote() {
@@ -272,7 +308,7 @@ form.addEventListener("submit", async (event) => {
   clearMessage();
   try {
     const payload = {
-      privacy_consent: true, payment_method: method, website: form.elements.website.value,
+      privacy_consent: true, payment_method: method, website: form.elements.website.value, coupon: couponCode,
       customer: {
         name: confirmed.name, email: confirmed.email, phone: confirmed.phone, address: confirmed.address, address_number: confirmed.address_number,
         complement: confirmed.complement || "", city: confirmed.city, state: confirmed.state, postal_code: confirmed.postal_code
@@ -311,6 +347,14 @@ form.addEventListener("submit", async (event) => {
   pixPercent = cfg.pix_discount_percent;
   const pixBadge = document.querySelector("#pix-option .pay-badge");
   if (pixBadge && pixPercent > 0) pixBadge.textContent = `${String(pixPercent).replace(".", ",")}% off`;
+  try {
+    const saved = sessionStorage.getItem("krypto-coupon");
+    if (saved) {
+      const r = await fetch(`/api/coupon?code=${encodeURIComponent(saved)}`, { cache: "no-store" });
+      const data = r.ok ? await r.json().catch(() => ({})) : {};
+      if (data.valid) { couponCode = data.code; couponPercent = data.percent; } else sessionStorage.removeItem("krypto-coupon");
+    }
+  } catch (_) {}
   const methods = info && info.payment_methods ? info.payment_methods : {};
   $("#pix-option").hidden = !methods.pix;
   $("#mp-option").hidden = !methods.mercadopago;
@@ -327,5 +371,6 @@ form.addEventListener("submit", async (event) => {
   }
   if (savedAddress) showSaved(savedAddress, false);
   else showEditor("Informe seus dados e onde vamos entregar. Não precisa criar conta.", false);
+  showCoupon();
   refreshButton();
 })();

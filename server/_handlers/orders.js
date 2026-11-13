@@ -1,7 +1,7 @@
 const { getSupabase, sendError, requireMethod, getSiteUrl, pixConfig } = require('../_lib/supabase');
 const { buildPixPayload } = require('../_lib/pix');
 const S = require('../_lib/shipping');
-const { readStoreSettings } = require('../_lib/settings');
+const { readStoreSettings, findCoupon } = require('../_lib/settings');
 
 function validEmail(value) {
   return typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -63,7 +63,15 @@ module.exports = async function handler(req, res) {
     if ((openOrders || 0) >= 3) return res.status(429).json({ detail: "Você já tem 3 pedidos aguardando pagamento. Pague ou aguarde expirarem para fazer outro." });
     // Desconto PIX definido no painel; o banco calcula o valor (o navegador nunca informa desconto).
     const store = await readStoreSettings(supabase);
-    const pixDiscountPercent = paymentMethod === "pix" ? Number(store.pix_discount_percent || 0) : 0;
+    const pixPercent = paymentMethod === "pix" ? Number(store.pix_discount_percent || 0) : 0;
+    // Cupom (opcional): soma ao desconto do PIX. O banco limita o total a 50% do valor das peças.
+    let couponPercent = 0;
+    if (String(body.coupon || "").trim()) {
+      const coupon = findCoupon(store, body.coupon);
+      if (!coupon) return res.status(400).json({ detail: "Esse cupom não é válido ou expirou. Remova-o ou confira o código." });
+      couponPercent = coupon.percent;
+    }
+    const pixDiscountPercent = Math.min(50, pixPercent + couponPercent);
     const { data, error } = await supabase.rpc("create_krypto_order_v2", {
       p_customer: {
         name: String(customer.name).trim().slice(0, 160), email: buyerEmail,

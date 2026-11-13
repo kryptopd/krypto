@@ -37,6 +37,7 @@ function layout({ title, description, canonical, image, jsonLd, body, extraHead 
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${esc(canonical)}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:type" content="product">
 <meta property="og:locale" content="pt_BR">
 <meta property="og:site_name" content="KRYPTO">
@@ -59,11 +60,12 @@ ${body}
 
 const HEADER = `<div class="announce" role="note"><span>Pague com PIX · Entrega para todo o Brasil</span></div>
 <header class="site-header store-header">
+  <button class="menu-toggle" type="button" data-menu-open aria-label="Abrir menu" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <a class="brand" href="/" aria-label="KRYPTO, página inicial"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
   <nav class="main-nav" aria-label="Navegação principal"><a href="/#colecao">Loja</a><a href="/avaliacoes.html">Avaliações</a><a href="/atendimento.html">Atendimento</a></nav>
   <div class="header-actions">
     <a class="header-account" href="/conta.html" aria-label="Meus pedidos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm-8 9c.6-3.9 3.7-6 8-6s7.4 2.1 8 6" /></svg><span data-account-label>Meus pedidos</span></a>
-    <a class="header-cart" href="/checkout.html" aria-label="Abrir sacola"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8Zm3.5 0V6.5a3.5 3.5 0 0 1 7 0V8" /></svg><span class="cart-label">Sacola</span><b class="cart-badge" data-cart-count hidden>0</b></a>
+    <a class="header-cart" id="cart-open" href="/checkout.html" aria-label="Abrir sacola"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8Zm3.5 0V6.5a3.5 3.5 0 0 1 7 0V8" /></svg><span class="cart-label">Sacola</span><b class="cart-badge" data-cart-count hidden>0</b></a>
   </div>
 </header>`;
 
@@ -71,6 +73,7 @@ const FOOTER = `<footer class="site-footer site-footer-expanded">
   <div class="footer-main">
     <div class="footer-brand-col"><a class="brand" href="/"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a><p>VISTA SUA ATITUDE.<br>FEITA PARA QUEM FAZ AS PRÓPRIAS REGRAS.</p></div>
     <div class="footer-col"><strong>EXPLORAR</strong><a href="/#colecao">Coleção</a><a href="/#sobre">Nossa história</a><a href="/conta.html">Meus pedidos</a></div>
+    <div class="footer-col" id="footer-contact"><strong>KRYPTO</strong><span>Moda urbana independente.</span></div>
     <div class="footer-col"><strong>AJUDA</strong><a href="/atendimento.html">Central de atendimento</a><a href="/avaliacoes.html">Avaliações e comentários</a><a href="/trocas-devolucoes.html">Trocas e devoluções</a><a href="/termos.html">Termos de compra</a><a href="/privacidade.html">Privacidade</a></div>
   </div>
   <div class="footer-bottom"><small>© 2026 KRYPTO. Todos os direitos reservados.</small><small>MODA URBANA · BRASIL</small></div>
@@ -121,7 +124,7 @@ async function productPage(req, res) {
 <main class="pdp-main">
   <nav class="crumbs" aria-label="Você está em"><a href="/">Loja</a><span>/</span>${product.category ? `<a href="/#colecao">${esc(product.category)}</a><span>/</span>` : ""}<strong>${esc(product.name)}</strong></nav>
   <section class="pdp">
-    <div class="pdp-gallery" id="pdp-gallery"><div class="pdp-stage"><img src="${esc(images[0] || "")}" alt="${esc(product.name)}" fetchpriority="high"></div></div>
+    <div class="pdp-gallery" id="pdp-gallery"><div class="pdp-stage"><div class="pdp-track"><img src="${esc(images[0] || "")}" alt="${esc(product.name)}" fetchpriority="high"></div></div></div>
     <div class="pdp-info">
       ${product.category ? `<span class="product-category">${esc(String(product.category).toUpperCase())}</span>` : ""}
       <h1>${esc(product.name)}</h1>
@@ -145,6 +148,7 @@ ${FOOTER}
 <script type="application/json" id="product-data">${safeJson(clientProduct)}</script>
 <script src="/shop.js"></script>
 <script src="/purchase.js"></script>
+<script src="/bag.js"></script>
 <script src="/produto.js" defer></script>`;
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
