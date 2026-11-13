@@ -5,7 +5,7 @@ const MAX_PHOTOS = 4;
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;   // a página já reduz a foto; isto é só um teto de segurança
 
 const fail = (status, message) => Object.assign(new Error(message), { statusCode: status });
-const MIGRATION_HINT = "Execute a migração supabase/migrations/20261107_photos_sizes_categories.sql no SQL Editor do Supabase e tente de novo.";
+const MIGRATION_HINT = "O banco ainda não recebeu as últimas migrações. Execute os arquivos pendentes da pasta supabase/migrations (20261107 em diante) no SQL Editor do Supabase e tente de novo.";
 
 // Erros do Postgres/PostgREST que significam "a migração ainda não foi executada".
 function isMissingSchema(error) {
@@ -92,10 +92,26 @@ async function normalizeProduct(supabase, body) {
     stock = Number(body.stock);
     if (!Number.isInteger(stock) || stock < 0) throw fail(400, "Estoque inválido.");
   }
+  // Preço original ("de"): opcional, precisa ser maior que o preço atual.
+  let compareAt = null;
+  if (body.compare_at !== undefined && body.compare_at !== null && String(body.compare_at).trim() !== "") {
+    const c = Number(String(body.compare_at).replace(",", "."));
+    if (!Number.isFinite(c) || Math.round(c * 100) <= Math.round(price * 100)) throw fail(400, "O preço original (\"de\") deve ser maior que o preço atual.");
+    compareAt = Math.round(c * 100);
+  }
+  // Lançamento agendado: a peça só aparece na loja a partir dessa data.
+  let publishAt = null;
+  if (body.publish_at) {
+    const d = new Date(body.publish_at);
+    if (Number.isNaN(d.getTime())) throw fail(400, "Data de publicação inválida.");
+    publishAt = d.toISOString();
+  }
   return {
     name: name.slice(0, 160), category, price_cents: Math.round(price * 100), stock, variants, weight_grams: weight,
     sizes, colors, images, image_url: images[0],
-    description: String(body.description || "").trim().slice(0, 2000), active: true
+    description: String(body.description || "").trim().slice(0, 2000), active: true,
+    compare_at_cents: compareAt, composition: String(body.composition || "").trim().slice(0, 1000),
+    care: String(body.care || "").trim().slice(0, 600), featured: body.featured === true || body.featured === "true", publish_at: publishAt
   };
 }
 
@@ -107,25 +123,39 @@ function detectImage(buffer) {
   return null;
 }
 
-async function uploadPhoto(supabase, dataUrl) {
+function parseImage(dataUrl, label) {
   const match = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ""));
   if (!match) throw fail(400, "Envie uma foto JPG, PNG ou WebP.");
   const buffer = Buffer.from(match[1], "base64");
   if (buffer.length > MAX_UPLOAD_BYTES) throw fail(413, "A foto ficou grande demais. Tente outra foto.");
   const kind = detectImage(buffer);   // confere o conteúdo real, não só o nome/tipo informado
-  if (!kind) throw fail(400, "O arquivo não parece ser uma foto JPG, PNG ou WebP.");
-  const path = `${new Date().toISOString().slice(0, 7)}/${Date.now().toString(36)}-${require("crypto").randomBytes(6).toString("hex")}.${kind.ext}`;
-  const send = () => supabase.storage.from(BUCKET).upload(path, buffer, { contentType: kind.type, cacheControl: "31536000", upsert: false });
-  let { error } = await send();
+  if (!kind) throw fail(400, `O arquivo${label ? ` (${label})` : ""} não parece ser uma foto JPG, PNG ou WebP.`);
+  return { buffer, kind };
+}
+
+// Foto principal + miniatura opcional (WebP). Com miniatura, os arquivos terminam em -l.webp (grande) e -m.webp (pequena);
+// a vitrine usa a pequena nos cartões e a grande na página da peça.
+async function uploadPhoto(supabase, dataUrl, thumbDataUrl) {
+  const full = parseImage(dataUrl);
+  const thumb = thumbDataUrl ? parseImage(thumbDataUrl, "miniatura") : null;
+  const withThumb = Boolean(thumb) && full.kind.ext === "webp" && thumb.kind.ext === "webp";
+  const base = `${new Date().toISOString().slice(0, 7)}/${Date.now().toString(36)}-${require("crypto").randomBytes(6).toString("hex")}`;
+  const path = withThumb ? `${base}-l.webp` : `${base}.${full.kind.ext}`;
+  const send = (p, img) => supabase.storage.from(BUCKET).upload(p, img.buffer, { contentType: img.kind.type, cacheControl: "31536000", upsert: false });
+  let { error } = await send(path, full);
   if (error && /bucket.*not.*found|not found/i.test(error.message || "")) {
     // Primeiro envio: cria a pasta pública sozinha.
     const created = await supabase.storage.createBucket(BUCKET, { public: true, fileSizeLimit: MAX_UPLOAD_BYTES, allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"] });
     if (created.error && !/already exists/i.test(created.error.message || "")) throw created.error;
-    ({ error } = await send());
+    ({ error } = await send(path, full));
   }
   if (error) throw error;
+  if (withThumb) {
+    const t = await send(`${base}-m.webp`, thumb);
+    if (t.error) { await supabase.storage.from(BUCKET).remove([path]); throw t.error; }
+  }
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl, path };
+  return { url: data.publicUrl, path, thumb: withThumb };
 }
 
 // Caminho dentro da nossa pasta (ou null se a URL é externa/antiga).
@@ -139,8 +169,22 @@ function allPhotoUrls(product) {
   (Array.isArray(product.colors) ? product.colors : []).forEach((c) => urls.push(...(c.images || [])));
   return [...new Set(urls.filter(Boolean))];
 }
-async function removePhotos(supabase, urls) {
-  const paths = [...new Set(urls.map(storagePathFromUrl).filter(Boolean))];
+// Fotos usadas por outras peças (ex.: peça duplicada) não podem ser apagadas do Storage.
+async function urlsUsedElsewhere(supabase, exceptId) {
+  const used = new Set();
+  const { data, error } = await supabase.from("products").select("id,image_url,images,colors");
+  if (error) throw error;
+  (data || []).filter((p) => p.id !== exceptId).forEach((p) => allPhotoUrls(p).forEach((u) => used.add(u)));
+  return used;
+}
+async function removePhotos(supabase, urls, opts = {}) {
+  let list = urls;
+  if (opts.exceptId !== undefined) {
+    try { const used = await urlsUsedElsewhere(supabase, opts.exceptId); list = urls.filter((u) => !used.has(u)); }
+    catch (error) { console.error("[KRYPTO] Não foi possível conferir fotos em uso; nada foi apagado", error); return; }
+  }
+  const base = list.map(storagePathFromUrl).filter(Boolean);
+  const paths = [...new Set([...base, ...base.filter((p) => p.endsWith("-l.webp")).map((p) => p.replace(/-l\.webp$/, "-m.webp"))])];
   if (!paths.length) return;
   const { error } = await supabase.storage.from(BUCKET).remove(paths);
   if (error) console.error("[KRYPTO] Não foi possível apagar fotos antigas do Storage", error);

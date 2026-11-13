@@ -52,7 +52,7 @@ function renderItems() {
 
     const row = el("div", undefined, "bag-item");
     const thumb = el("div", undefined, "bag-thumb");
-    if (product) thumb.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
+    if (product) thumb.style.backgroundImage = `url("${K.thumbOf(coverFor(product, line.color))}")`;
     const info = el("div", undefined, "bag-info");
     info.append(el("strong", product ? product.name : "Produto indisponível"));
     if (st.unavailable) info.append(el("small", "Sem estoque. Remova para continuar.", "bag-warn"));
@@ -77,7 +77,7 @@ function renderItems() {
 
     const s = el("div", undefined, "summary-item");
     const t = el("div", undefined, "summary-thumb");
-    if (product) t.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
+    if (product) t.style.backgroundImage = `url("${K.thumbOf(coverFor(product, line.color))}")`;
     const d = el("div"); d.append(el("strong", product ? product.name : "Indisponível"), el("small", `${line.color ? `${line.color} · ` : ""}${line.size ? `Tam. ${line.size} · ` : ""}Qtd. ${st.qty}`));
     s.append(t, d, el("b", product ? money(lineTotal(st)) : ""));
     sum.append(s);
@@ -323,6 +323,8 @@ form.addEventListener("submit", async (event) => {
     Cart.clear();
     K.Orders.add(result.id);          // aparece em "Meus pedidos" neste aparelho
     K.Profile.write(confirmed);       // próxima compra já vem com os dados preenchidos
+    // Logado e sem endereço na conta: guarda este endereço na conta (sem atrapalhar a compra).
+    try { const acc = await K.Account.me(); if (acc && !(acc.address && acc.address.address)) await K.Account.call("me", "PUT", { name: acc.name || confirmed.name, phone: acc.phone || confirmed.phone, address: confirmed }); } catch (_) {}
     if (result.payment_method === "pix") {
       clearMessage("Pedido criado! Abrindo a chave PIX…");
       location.assign(`pedido.html?order=${encodeURIComponent(result.id)}&new=1`);
@@ -362,8 +364,11 @@ form.addEventListener("submit", async (event) => {
   if (!methods.pix && !methods.mercadopago) showError("A loja ainda não configurou uma forma de pagamento. Volte em breve.");
   if (info && !info.configured) showError("A loja ainda não configurou o frete. Volte em breve.");
 
+  // Endereço salvo: o da conta (se logado) tem prioridade sobre o deste aparelho.
+  const account = await K.Account.me();
+  const accountAddress = account && account.address && account.address.address ? { ...account.address, name: account.address.name || account.name, phone: account.address.phone || account.phone, email: account.email } : null;
   const stored = K.Profile.read();
-  savedAddress = validAddress(stored) ? stored : null;
+  savedAddress = validAddress(accountAddress) ? accountAddress : (validAddress(stored) ? stored : null);
   renderItems();
   {
     const started = lineState().filter((st) => !st.unavailable);

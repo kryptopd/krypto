@@ -43,7 +43,7 @@
       const product = byId(line.product_id);
       const row = el("div", undefined, "bag-item");
       const thumb = el("div", undefined, "bag-thumb");
-      if (product) thumb.style.backgroundImage = `url("${coverFor(product, line.color)}")`;
+      if (product) thumb.style.backgroundImage = `url("${K.thumbOf(coverFor(product, line.color))}")`;
       const info = el("div", undefined, "bag-info");
       if (!product || maxQty(product, line) < 1 || !lineColorOk(product, line)) {
         blocked = true;

@@ -8,6 +8,7 @@
   <title>Meus pedidos — KRYPTO</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,15 +20,84 @@
       <svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg>
       <span>KRYPTO<span class="brand-dot">.</span></span>
     </a>
-    <span class="checkout-step"><span>00</span> MEUS PEDIDOS</span>
+    <span class="checkout-step"><span>00</span> MINHA CONTA</span>
     <a class="admin-store-link" href="index.html">← Voltar para a loja</a>
   </header>
 
   <main class="account-main orders-main">
+    <section class="account-card" id="account-box" aria-labelledby="account-title">
+      <span class="eyebrow"><span class="eyebrow-line"></span> SUA CONTA</span>
+      <h1 id="account-title">Entre e tenha tudo <span>salvo.</span></h1>
+      <p class="account-lead" id="account-lead">Com a conta, seus pedidos, favoritos e endereço ficam salvos e aparecem em qualquer aparelho. Comprar sem conta continua possível.</p>
+
+      <div id="account-guest">
+        <div class="auth-tabs" role="tablist" aria-label="Entrar ou criar conta">
+          <button type="button" role="tab" id="tab-login" aria-selected="true" aria-controls="login-form">Entrar</button>
+          <button type="button" role="tab" id="tab-register" aria-selected="false" aria-controls="register-form">Criar conta</button>
+        </div>
+        <form class="auth-form" id="login-form" novalidate>
+          <label class="field">E-mail<input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+          <label class="field">Senha<input name="password" type="password" autocomplete="current-password" required></label>
+          <p class="form-note" id="login-feedback" role="status" aria-live="polite"></p>
+          <button class="button button-primary" type="submit">Entrar <span aria-hidden="true">↗</span></button>
+          <p class="auth-switch" id="forgot-note">Esqueceu a senha? <a href="atendimento.html" class="link-button">Fale com o atendimento</a> e geramos uma senha temporária para você.</p>
+        </form>
+        <form class="auth-form" id="register-form" novalidate hidden>
+          <label class="field">Nome<input name="name" autocomplete="name" maxlength="160" required></label>
+          <label class="field">E-mail<input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+          <label class="field">Telefone com DDD <span class="optional">(opcional)</span><input name="phone" type="tel" autocomplete="tel" inputmode="tel"></label>
+          <label class="field">Senha <span class="optional">(mínimo 8 caracteres)</span><input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+          <label class="honeypot" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
+          <label class="check-card privacy-check"><input type="checkbox" name="consent"><span>Li e concordo com a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
+          <p class="form-note" id="register-feedback" role="status" aria-live="polite"></p>
+          <button class="button button-primary" type="submit">Criar minha conta <span aria-hidden="true">↗</span></button>
+        </form>
+      </div>
+
+      <div id="account-user" hidden>
+        <div class="account-summary"><div><strong id="acc-name"></strong><small id="acc-email"></small></div><button class="button button-outline" type="button" id="acc-logout">Sair</button></div>
+        <details class="orders-recover" id="acc-profile-box">
+          <summary>Meus dados e endereço de entrega</summary>
+          <form class="auth-form" id="profile-form" novalidate>
+            <label class="field">Nome<input name="name" autocomplete="name" maxlength="160"></label>
+            <label class="field">Telefone com DDD<input name="phone" type="tel" autocomplete="tel"></label>
+            <div class="form-grid">
+              <label class="field">CEP<input name="postal_code" inputmode="numeric" autocomplete="postal-code" maxlength="9"></label>
+              <label class="field">Estado (UF)<input name="state" maxlength="2" autocomplete="address-level1"></label>
+              <label class="field field-full">Endereço<input name="address" autocomplete="address-line1" maxlength="200"></label>
+              <label class="field">Número<input name="address_number" maxlength="30"></label>
+              <label class="field">Complemento<input name="complement" maxlength="120"></label>
+              <label class="field field-full">Cidade<input name="city" autocomplete="address-level2" maxlength="100"></label>
+            </div>
+            <p class="form-note" id="profile-feedback" role="status" aria-live="polite"></p>
+            <button class="button button-primary" type="submit">Salvar dados <span aria-hidden="true">↗</span></button>
+          </form>
+        </details>
+        <details class="orders-recover">
+          <summary>Trocar senha</summary>
+          <form class="auth-form" id="password-form" novalidate>
+            <label class="field">Senha atual<input name="current_password" type="password" autocomplete="current-password"></label>
+            <label class="field">Nova senha <span class="optional">(mínimo 8 caracteres)</span><input name="new_password" type="password" autocomplete="new-password" minlength="8"></label>
+            <p class="form-note" id="password-feedback" role="status" aria-live="polite"></p>
+            <button class="button button-outline" type="submit">Trocar senha</button>
+          </form>
+        </details>
+        <details class="orders-recover">
+          <summary>Vincular um pedido que fiz sem conta</summary>
+          <form class="auth-form" id="claim-form" novalidate>
+            <label class="field">Código do pedido<input name="code" maxlength="20" placeholder="Ex.: A1B2C3D4E5F6"></label>
+            <label class="field">E-mail usado na compra<input name="email" type="email" autocomplete="email"></label>
+            <p class="form-note" id="claim-feedback" role="status" aria-live="polite"></p>
+            <button class="button button-outline" type="submit">Vincular à minha conta</button>
+          </form>
+        </details>
+      </div>
+    </section>
+
     <section class="account-card orders-card" aria-labelledby="orders-title">
       <span class="eyebrow"><span class="eyebrow-line"></span> MEUS PEDIDOS</span>
       <h1 id="orders-title">Acompanhe suas <span>compras.</span></h1>
-      <p class="account-lead">Sem cadastro e sem senha: os pedidos feitos neste aparelho aparecem aqui e o status é atualizado sozinho.</p>
+      <p class="account-lead">Os pedidos da sua conta e os feitos neste aparelho aparecem aqui, e o status é atualizado sozinho.</p>
       <div class="orders-toolbar"><button class="button button-outline" id="orders-refresh" type="button">Atualizar agora</button></div>
       <div class="orders-list" id="orders-list" aria-live="polite"></div>
       <div class="orders-empty" id="orders-empty" hidden>

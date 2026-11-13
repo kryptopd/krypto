@@ -8,6 +8,7 @@
   <title>Seu pedido — KRYPTO</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -70,6 +71,12 @@
         </ol>
       </div>
       <p class="pix-note" id="pix-note">Assim que identificarmos o seu pagamento, esta página muda para “Pagamento confirmado”. Pode fechar e voltar depois com o link deste pedido.</p>
+    </section>
+
+    <section class="order-timeline" id="order-timeline" aria-labelledby="timeline-title" hidden>
+      <h2 id="timeline-title">Histórico do pedido</h2>
+      <ol id="timeline-list"></ol>
+      <p class="timeline-track" id="timeline-track" hidden></p>
     </section>
 
     <section class="order-progress" id="order-progress" aria-label="Andamento do pedido" hidden>

@@ -8,6 +8,11 @@ const handlers = {
   adminSettings: require("../server/_handlers/admin/settings"),
   adminAlerts: require("../server/_handlers/admin/alerts"),
   adminPush: require("../server/_handlers/admin/push"),
+  account: require("../server/_handlers/account"),
+  adminOrdersList: require("../server/_handlers/admin/orders-list"),
+  adminReports: require("../server/_handlers/admin/reports"),
+  adminContacts: require("../server/_handlers/admin/contacts"),
+  subscribe: require("../server/_handlers/subscribe"),
   config: require("../server/_handlers/config"),
   coupon: require("../server/_handlers/coupon"),
   stockAlert: require("../server/_handlers/stock-alert"),
@@ -56,11 +61,14 @@ module.exports = async function handler(req, res) {
   else if (route === "support") target = handlers.support;
   else if (route === "shipping") target = handlers.shipping;
   else if (route === "config") target = handlers.config;
+  else if (segments.length === 2 && segments[0] === "account") { req.query.action = segments[1]; target = handlers.account; }
   else if (route === "coupon") target = handlers.coupon;
   else if (route === "stock-alert") target = handlers.stockAlert;
   else if (route === "page/product") target = handlers.seo;
   else if (route === "page/sitemap") { req.query.kind = "sitemap"; target = handlers.seo; }
   else if (route === "page/robots") { req.query.kind = "robots"; target = handlers.seo; }
+  else if (route === "page/feed") { req.query.kind = "feed"; target = handlers.seo; }
+  else if (route === "page/gverify") { req.query.kind = "gverify"; target = handlers.seo; }
   else if (route === "auth/config") target = handlers.authConfig;
   else if (route === "cron/expire-orders") target = handlers.expireOrders;
   else if (route === "webhooks/mercadopago") target = handlers.mercadoPagoWebhook;
@@ -71,6 +79,10 @@ module.exports = async function handler(req, res) {
   else if (route === "admin/support") target = handlers.adminSupport;
   else if (route === "admin/settings") target = handlers.adminSettings;
   else if (route === "admin/alerts") target = handlers.adminAlerts;
+  else if (route === "admin/orders") target = handlers.adminOrdersList;
+  else if (route === "admin/reports") target = handlers.adminReports;
+  else if (route === "admin/contacts") target = handlers.adminContacts;
+  else if (route === "subscribe") target = handlers.subscribe;
   else if (route === "admin/push") target = handlers.adminPush;
   else if (segments.length === 3 && segments[0] === "admin" && segments[1] === "orders" && ["PATCH", "DELETE"].includes(method)) {
     req.query.id = segments[2]; target = handlers.adminOrder;

@@ -53,6 +53,20 @@
   // A linha da sacola só é válida se a cor ainda existir na peça.
   const lineColorOk = (product, line) => !product || colorsOf(product).length === 0 ? !line.color : colorsOf(product).some((c) => c.name === line.color);
 
+  // ---------- Fotos pequenas e preço "de/por" ----------
+  // Fotos enviadas pelo painel em WebP têm uma versão pequena (-m) ao lado da grande (-l): carrega bem mais rápido nos cartões.
+  const thumbOf = (url) => (/-l\.webp(\?.*)?$/.test(String(url || "")) ? String(url).replace(/-l\.webp/, "-m.webp") : url);
+  const saleOf = (p) => (p && Number(p.compare_at_cents) > Number(p.price_cents) ? { old: Number(p.compare_at_cents), pct: Math.round((1 - p.price_cents / p.compare_at_cents) * 100) } : null);
+  // Bloco de preço: "de" riscado + preço atual + selo de desconto.
+  function priceBlock(p, currentClass) {
+    const box = document.createElement("div"); box.className = "price-block";
+    const sale = saleOf(p);
+    if (sale) { const old = document.createElement("s"); old.className = "price-old"; old.textContent = money(sale.old); old.setAttribute("aria-label", "Preço original"); box.append(old); }
+    const cur = document.createElement("strong"); cur.className = currentClass || "product-price"; cur.textContent = money(p.price_cents); box.append(cur);
+    if (sale) { const tag = document.createElement("em"); tag.className = "off-tag"; tag.textContent = `-${sale.pct}%`; box.append(tag); }
+    return box;
+  }
+
   // ---------- Estoque por variação (cor x tamanho) ----------
   const variantsOf = (product) => (product && Array.isArray(product.variants) ? product.variants : []);
   // Unidades da combinação; sem variações cadastradas vale o estoque total da peça.
@@ -143,6 +157,38 @@
     });
   }
 
+  // ---------- Conta do cliente (login próprio, salvo no banco) ----------
+  let mePromise = null;
+  const Account = {
+    // Cliente logado ou null. Resultado guardado; use refresh() depois de entrar/sair.
+    me() { return (mePromise = mePromise || fetch("/api/account/me", { cache: "no-store", credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).catch(() => null)); },
+    refresh() { mePromise = null; return Account.me(); },
+    async call(action, method, body) {
+      const r = await fetch(`/api/account/${action}`, { method, credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || "Não foi possível concluir. Tente novamente.");
+      mePromise = null;
+      return data;
+    }
+  };
+  // Troca o texto "Meus pedidos" pelo nome do cliente quando há login.
+  function refreshAccountLabel() {
+    Account.me().then((me) => {
+      document.querySelectorAll("[data-account-label]").forEach((el) => { el.textContent = me ? (me.name ? `Olá, ${me.name.split(" ")[0]}` : "Minha conta") : (Orders.count() ? `Meus pedidos (${Orders.count()})` : "Entrar"); });
+    });
+  }
+
+  // ---------- App instalável (PWA) ----------
+  let installEvent = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvent = e; showInstall(); });
+  function showInstall() {
+    if (!installEvent || !menuContact || menuContact.querySelector(".menu-install")) return;
+    const b = mk("button", "Instalar o app da KRYPTO", "menu-contact-link menu-install"); b.type = "button";
+    b.addEventListener("click", async () => { installEvent.prompt(); try { await installEvent.userChoice; } catch (_) {} installEvent = null; b.remove(); });
+    menuContact.prepend(b);
+  }
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch(() => {}); });
+
   // ---------- Menu do celular ----------
   const mk = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
   let menuContact = null;
@@ -185,6 +231,7 @@
     });
     [["Meus pedidos", "/conta.html"], ["Avaliações", "/avaliacoes.html"], ["Atendimento", "/atendimento.html"], ["Trocas e devoluções", "/trocas-devolucoes.html"]].forEach(([l, h]) => extra.append(link(l, h)));
     list.append(extra);
+    showInstall();
   }
 
   // ---------- Contato (WhatsApp, Instagram, dados da empresa) vindo do painel ----------
@@ -200,11 +247,20 @@
   }
   function initContact() {
     loadConfig().then((cfg) => {
-      if (menuContact) menuContact.replaceChildren(...contactLinks(cfg, "menu-contact-link"));
+      if (menuContact) { menuContact.replaceChildren(...contactLinks(cfg, "menu-contact-link")); showInstall(); }
+      // Dados da empresa para o Google (resultado de busca e Google Meu Negócio): inseridos aqui porque vêm do painel.
+      if (cfg.instagram || cfg.whatsapp || cfg.email || cfg.legal_name) {
+        const ld = { "@context": "https://schema.org", "@type": "Organization", name: cfg.legal_name || "KRYPTO", brand: "KRYPTO", url: location.origin, logo: `${location.origin}/icon-512.png` };
+        if (cfg.instagram) ld.sameAs = [cfg.instagram];
+        if (cfg.email) ld.email = cfg.email;
+        if (cfg.whatsapp) ld.contactPoint = { "@type": "ContactPoint", telephone: `+${cfg.whatsapp}`, contactType: "customer service", areaServed: "BR", availableLanguage: "pt-BR" };
+        if (cfg.address) ld.address = { "@type": "PostalAddress", streetAddress: cfg.address, addressCountry: "BR" };
+        const tag = document.createElement("script"); tag.type = "application/ld+json"; tag.textContent = JSON.stringify(ld).replace(/</g, "\\u003c"); document.head.append(tag);
+      }
       if (cfg.whatsapp) {
         const wa = mk("a", undefined, "wa-float"); wa.href = waHref(cfg); wa.target = "_blank"; wa.rel = "noopener noreferrer"; wa.setAttribute("aria-label", "Falar com a KRYPTO no WhatsApp");
         wa.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.3-4.1A8 8 0 1 1 8.2 18.9L4 20Z"/><path d="M9 9.5c.2 2.2 2.3 4.3 4.5 4.5l1.3-1.2-1.8-.9-.8.5c-.8-.4-1.5-1.1-1.9-1.9l.5-.8-.9-1.8L9 9.5Z"/></svg><span>WhatsApp</span>';
-        document.body.append(wa);
+        const wrap = mk("aside", undefined, "wa-wrap"); wrap.setAttribute("aria-label", "Atendimento por WhatsApp"); wrap.append(wa); document.body.append(wrap);
       }
       const col = document.querySelector("#footer-contact");
       const links = contactLinks(cfg, "");
@@ -283,12 +339,13 @@
   }
   function refreshAccount() {
     const n = Orders.count();
-    document.querySelectorAll("[data-account-label]").forEach((el) => { el.textContent = n ? `Meus pedidos (${n})` : "Meus pedidos"; });
+    document.querySelectorAll("[data-account-label]").forEach((el) => { el.textContent = n ? `Meus pedidos (${n})` : "Minha conta"; });
+    if (window.Krypto && window.Krypto.Account) refreshAccountLabel();
   }
   window.addEventListener("krypto:cart", refreshBadge);
   window.addEventListener("storage", (e) => { if (e.key === CART_KEY) refreshBadge(); });
   window.addEventListener("krypto:orders", refreshAccount);
 document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); initConsent(); initMenu(); initContact(); });
 
-  window.Krypto = { loadShippingInfo, variantsOf, stockFor, colorStock, maxQty, productPath, loadConfig, track, colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
+  window.Krypto = { Account, thumbOf, saleOf, priceBlock, loadShippingInfo, variantsOf, stockFor, colorStock, maxQty, productPath, loadConfig, track, colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
 })();

@@ -1,4 +1,5 @@
 const { getSupabase, getSiteUrl, sendError } = require('../_lib/supabase');
+const { readStoreSettings } = require('../_lib/settings');
 
 // Páginas que o Google precisa enxergar: página de cada produto (HTML completo, com dados estruturados),
 // sitemap.xml e robots.txt. Rotas: /produto/:slug, /sitemap.xml, /robots.txt (ver vercel.json e api/index.js).
@@ -10,6 +11,7 @@ const safeJson = (obj) => JSON.stringify(obj).replace(/</g, "\\u003c").replace(/
 const money = (cents) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(cents || 0) / 100);
 
 const COLUMN_SETS = [
+  "id,name,category,price_cents,stock,sizes,image_url,images,colors,variants,description,active,created_at,compare_at_cents,composition,care,featured,publish_at",
   "id,name,category,price_cents,stock,sizes,image_url,images,colors,variants,description,active,created_at",
   "id,name,category,price_cents,stock,sizes,image_url,images,colors,description,active,created_at",
   "id,name,category,price_cents,stock,sizes,image_url,images,description,active"
@@ -23,7 +25,8 @@ async function loadProducts(db, id) {
     if (!error || !["42703", "PGRST204"].includes(error.code)) break;
   }
   if (error) throw error;
-  return data || [];
+  const now = Date.now();
+  return (data || []).filter((p) => !p.publish_at || new Date(p.publish_at).getTime() <= now);   // lançamento agendado
 }
 
 function layout({ title, description, canonical, image, jsonLd, body, extraHead = "" }) {
@@ -38,6 +41,7 @@ function layout({ title, description, canonical, image, jsonLd, body, extraHead 
 <link rel="canonical" href="${esc(canonical)}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <meta property="og:type" content="product">
 <meta property="og:locale" content="pt_BR">
 <meta property="og:site_name" content="KRYPTO">
@@ -53,12 +57,13 @@ ${extraHead}
 <script type="application/ld+json">${safeJson(jsonLd)}</script>
 </head>
 <body class="pdp-page">
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
 ${body}
 </body>
 </html>`;
 }
 
-const HEADER = `<div class="announce" role="note"><span>Pague com PIX · Entrega para todo o Brasil</span></div>
+const HEADER = `<div class="announce" role="region" aria-label="Avisos da loja"><span>Pague com PIX · Entrega para todo o Brasil</span></div>
 <header class="site-header store-header">
   <button class="menu-toggle" type="button" data-menu-open aria-label="Abrir menu" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <a class="brand" href="/" aria-label="KRYPTO, página inicial"><svg class="brand-crown" viewBox="0 0 40 32" aria-hidden="true"><path d="M4 25 2 8l10 8L20 2l8 14 10-8-2 17H4Zm1 4h30" /></svg><span>KRYPTO<span class="brand-dot">.</span></span></a>
@@ -112,7 +117,7 @@ async function productPage(req, res) {
     ...(count ? { aggregateRating: { "@type": "AggregateRating", ratingValue: avg.toFixed(1), reviewCount: count } } : {}),
     ...(count ? { review: reviews.slice(0, 5).map((r) => ({ "@type": "Review", author: { "@type": "Person", name: r.customer_name }, datePublished: String(r.created_at).slice(0, 10), reviewRating: { "@type": "Rating", ratingValue: r.rating, bestRating: 5 }, reviewBody: r.comment })) } : {})
   };
-  const clientProduct = { id: product.id, name: product.name, category: product.category || "", price_cents: product.price_cents, stock: product.stock, sizes: product.sizes || [], image_url: product.image_url, images: product.images || [], colors, variants: product.variants || [], description: product.description || "" };
+  const clientProduct = { id: product.id, name: product.name, category: product.category || "", price_cents: product.price_cents, stock: product.stock, sizes: product.sizes || [], image_url: product.image_url, images: product.images || [], colors, variants: product.variants || [], description: product.description || "", compare_at_cents: product.compare_at_cents || null };
 
   const stars = (n) => "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.round(n));
   const reviewsHtml = count
@@ -121,17 +126,18 @@ async function productPage(req, res) {
     : `<p class="service-muted">Ainda não há avaliações desta peça. Só quem recebeu o pedido pode avaliar.</p>`;
 
   const body = `${HEADER}
-<main class="pdp-main">
+<main class="pdp-main" id="conteudo" tabindex="-1">
   <nav class="crumbs" aria-label="Você está em"><a href="/">Loja</a><span>/</span>${product.category ? `<a href="/#colecao">${esc(product.category)}</a><span>/</span>` : ""}<strong>${esc(product.name)}</strong></nav>
   <section class="pdp">
     <div class="pdp-gallery" id="pdp-gallery"><div class="pdp-stage"><div class="pdp-track"><img src="${esc(images[0] || "")}" alt="${esc(product.name)}" fetchpriority="high"></div></div></div>
     <div class="pdp-info">
       ${product.category ? `<span class="product-category">${esc(String(product.category).toUpperCase())}</span>` : ""}
       <h1>${esc(product.name)}</h1>
-      <p class="pdp-price" id="pdp-price">${money(product.price_cents)}</p>
+      <p class="pdp-price" id="pdp-price">${product.compare_at_cents && product.compare_at_cents > product.price_cents ? `<s class="price-old" aria-label="Preço original">${money(product.compare_at_cents)}</s> ` : ""}<span>${money(product.price_cents)}</span>${product.compare_at_cents && product.compare_at_cents > product.price_cents ? ` <em class="off-tag">-${Math.round((1 - product.price_cents / product.compare_at_cents) * 100)}%</em>` : ""}</p>
       <p class="pdp-pix" id="pdp-pix" hidden></p>
       ${product.description ? `<p class="pdp-desc">${esc(product.description)}</p>` : ""}
       <div id="pdp-purchase"></div>
+      ${product.composition || product.care ? `<div class="pdp-details">${product.composition ? `<details open><summary>Composição</summary><p>${esc(product.composition)}</p></details>` : ""}${product.care ? `<details><summary>Cuidados</summary><p>${esc(product.care)}</p></details>` : ""}</div>` : ""}
       <ul class="pdp-perks">
         <li><strong>Entrega para todo o Brasil</strong><small>Frete calculado no checkout pelo seu estado.</small></li>
         <li><strong>Compra segura</strong><small>PIX ou cartão pelo Mercado Pago.</small></li>
@@ -172,6 +178,63 @@ async function sitemap(req, res) {
   return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${esc(u.loc)}</loc>${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ""}<priority>${u.priority}</priority></url>`).join("\n")}\n</urlset>\n`);
 }
 
+// Feed de produtos para Google Merchant Center (Google Shopping) e catálogo do Meta (Instagram/Facebook Shopping).
+// Uma linha por combinação cor x tamanho quando a peça tem estoque por variação.
+async function feed(req, res) {
+  const base = getSiteUrl(req);
+  const products = await loadProducts(getSupabase());
+  const x = (v) => String(v == null ? "" : v).replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  const price = (c) => `${(Number(c) / 100).toFixed(2)} BRL`;
+  const items = [];
+  for (const p of products) {
+    const colors = Array.isArray(p.colors) ? p.colors : [], variants = Array.isArray(p.variants) ? p.variants : [];
+    const rows = variants.length ? variants : [{ color: "", size: "", stock: p.stock }];
+    for (const v of rows) {
+      const color = colors.find((c) => c.name === v.color);
+      const images = (color && color.images && color.images.length ? color.images : (p.images && p.images.length ? p.images : [p.image_url])).filter(Boolean);
+      const id = variants.length ? [p.id, slugify(v.color), slugify(v.size)].filter((s) => s !== "peca" || false).join("-").replace(/-+/g, "-") : String(p.id);
+      const title = [p.name, v.color, v.size].filter(Boolean).join(" - ");
+      const sale = Number(p.compare_at_cents) > Number(p.price_cents);
+      items.push(`    <item>
+      <g:id>${x(id)}</g:id>
+      <g:title>${x(title.slice(0, 150))}</g:title>
+      <g:description>${x((p.description || `${p.name} - moda urbana KRYPTO.`).slice(0, 4900))}</g:description>
+      <g:link>${x(base + productPath(p))}</g:link>
+      <g:image_link>${x(images[0] || "")}</g:image_link>${images.slice(1, 6).map((u) => `\n      <g:additional_image_link>${x(u)}</g:additional_image_link>`).join("")}
+      <g:availability>${Number(v.stock) > 0 ? "in stock" : "out of stock"}</g:availability>
+      <g:price>${price(sale ? p.compare_at_cents : p.price_cents)}</g:price>${sale ? `\n      <g:sale_price>${price(p.price_cents)}</g:sale_price>` : ""}
+      <g:brand>KRYPTO</g:brand>
+      <g:condition>new</g:condition>
+      <g:identifier_exists>no</g:identifier_exists>
+      <g:item_group_id>${p.id}</g:item_group_id>${v.color ? `\n      <g:color>${x(v.color)}</g:color>` : ""}${v.size ? `\n      <g:size>${x(v.size)}</g:size>` : ""}${p.category ? `\n      <g:product_type>${x(p.category)}</g:product_type>` : ""}
+      <g:google_product_category>1604</g:google_product_category>
+    </item>`);
+    }
+  }
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=1200");
+  return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+  <channel>
+    <title>KRYPTO</title>
+    <link>${x(base)}</link>
+    <description>Moda urbana KRYPTO</description>
+${items.join("\n")}
+  </channel>
+</rss>
+`);
+}
+
+// Arquivo de verificação do Google Search Console: /googleXXXX.html (o nome vem das Configurações).
+async function googleVerify(req, res) {
+  const store = await readStoreSettings(getSupabase());
+  const file = String(req.query.file || "");
+  if (!store.google_verification || file !== store.google_verification) return notFound(res);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "s-maxage=300");
+  return res.status(200).send(`google-site-verification: ${file}`);
+}
+
 function robots(req, res) {
   const base = getSiteUrl(req);
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -184,6 +247,8 @@ module.exports = async function handler(req, res) {
     const kind = req.query.kind;
     if (kind === "sitemap") return await sitemap(req, res);
     if (kind === "robots") return robots(req, res);
+    if (kind === "feed") return await feed(req, res);
+    if (kind === "gverify") return await googleVerify(req, res);
     return await productPage(req, res);
   } catch (error) { return sendError(res, error); }
 };

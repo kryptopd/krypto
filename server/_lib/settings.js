@@ -5,7 +5,10 @@ const DEFAULTS = {
   whatsapp: "", whatsapp_message: "Olá! Vim pelo site da KRYPTO e gostaria de ajuda.", instagram: "", email: "",
   legal_name: "", cnpj: "", address: "",
   banner: { enabled: false, title: "", text: "", cta_label: "", cta_url: "", image_url: "" },
-  coupons: []
+  coupons: [],
+  low_stock_threshold: 3,
+  newsletter_enabled: false, welcome_coupon: "",
+  google_verification: ""
 };
 
 const fail = (message) => Object.assign(new Error(message), { statusCode: 400 });
@@ -70,13 +73,22 @@ function sanitize(raw) {
     if (!Number.isFinite(percent) || percent <= 0 || percent > 50) throw fail(`O cupom ${code} precisa de um desconto entre 1% e 50%.`);
     if (seen.has(code)) throw fail(`O cupom ${code} está repetido.`);
     seen.add(code);
-    return { code, percent: Math.round(percent * 100) / 100, active: !(c && (c.active === false || c.active === "false")) };
+    return { code, percent: Math.round(percent * 100) / 100, active: !(c && (c.active === false || c.active === "false")), first_order: Boolean(c && (c.first_order === true || c.first_order === "true")) };
   });
+
+  const intIn = (v, label, min, max, def) => { const n = v === "" || v == null ? def : Number(v); if (!Number.isInteger(n) || n < min || n > max) throw fail(`${label}: informe um número inteiro de ${min} a ${max}.`); return n; };
+  const welcome = str(b.welcome_coupon, 20).toUpperCase();
+  if (welcome && !coupons.some((c) => c.code === welcome)) throw fail("O cupom de boas-vindas precisa ser um dos cupons cadastrados.");
+  const gv = str(b.google_verification, 80);
+  if (gv && !/^google[a-z0-9]{8,60}(\.html)?$/i.test(gv)) throw fail("O código do Search Console tem o formato google1234abcd5678.html.");
 
   return {
     pix_discount_percent: Math.round(pct * 100) / 100, ga_id: ga, pixel_id: pixel,
     whatsapp, whatsapp_message: str(b.whatsapp_message, 200) || DEFAULTS.whatsapp_message, instagram, email,
-    legal_name: str(b.legal_name, 120), cnpj, address: str(b.address, 200), banner, coupons
+    legal_name: str(b.legal_name, 120), cnpj, address: str(b.address, 200), banner, coupons,
+    low_stock_threshold: intIn(b.low_stock_threshold, "Estoque baixo", 0, 100, 3),
+    newsletter_enabled: b.newsletter_enabled === true || b.newsletter_enabled === "true", welcome_coupon: welcome,
+    google_verification: gv ? (/\.html$/i.test(gv) ? gv : `${gv}.html`) : ""
   };
 }
 
@@ -101,7 +113,9 @@ function publicSettings(s) {
     pix_discount_percent: s.pix_discount_percent, ga_id: s.ga_id, pixel_id: s.pixel_id,
     whatsapp: s.whatsapp, whatsapp_message: s.whatsapp_message, instagram: s.instagram, email: s.email,
     legal_name: s.legal_name, cnpj: s.cnpj, address: s.address,
-    banner: s.banner && s.banner.enabled ? s.banner : null
+    banner: s.banner && s.banner.enabled ? s.banner : null,
+    newsletter_enabled: s.newsletter_enabled,
+    welcome: s.newsletter_enabled && s.welcome_coupon ? { percent: (s.coupons.find((c) => c.code === s.welcome_coupon && c.active) || {}).percent || 0 } : null
   };
 }
 

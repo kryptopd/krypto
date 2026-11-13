@@ -8,6 +8,8 @@
     { "source": "/produto/:slug", "destination": "/api/index?path=page/product&slug=:slug" },
     { "source": "/sitemap.xml", "destination": "/api/index?path=page/sitemap" },
     { "source": "/robots.txt", "destination": "/api/index?path=page/robots" },
+    { "source": "/feed/google.xml", "destination": "/api/index?path=page/feed" },
+    { "source": "/:file(google[a-zA-Z0-9]+\\.html)", "destination": "/api/index?path=page/gverify&file=:file" },
     {
       "source": "/api/:path*",
       "destination": "/api/index?path=:path*"

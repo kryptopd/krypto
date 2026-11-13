@@ -73,15 +73,21 @@ function render() {
 
 async function load() {
   const ids = K.Orders.list().map((o) => o.id);
-  if (!ids.length) { orders = []; return render(); }
+  let local = [], remote = [];
   try {
-    const response = await fetch("/api/orders/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }), cache: "no-store" });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || "Não foi possível consultar seus pedidos.");
-    orders = data.orders || [];
-    // Pedidos que não existem mais saem da lista deste aparelho.
-    const found = new Set(orders.map((o) => o.public_id));
-    ids.filter((id) => !found.has(id)).forEach((id) => K.Orders.remove(id));
+    if (ids.length) {
+      const response = await fetch("/api/orders/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }), cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Não foi possível consultar seus pedidos.");
+      local = data.orders || [];
+      // Pedidos que não existem mais saem da lista deste aparelho.
+      const found = new Set(local.map((o) => o.public_id));
+      ids.filter((id) => !found.has(id)).forEach((id) => K.Orders.remove(id));
+    }
+    if (me) { try { remote = (await A.call("orders", "GET")).orders || []; } catch (_) {} }
+    const seen = new Set();
+    orders = [...remote, ...local].filter((o) => (seen.has(o.public_id) ? false : seen.add(o.public_id)))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     render();
   } catch (e) {
     listBox.replaceChildren(el("p", e.message, "form-note"));
@@ -114,5 +120,91 @@ $("#recover-form").addEventListener("submit", async (e) => {
   } catch (error) { note(fb, error.message, true); }
   btn.disabled = false;
 });
+
+
+// ---------- Conta do cliente (login salvo no banco) ----------
+const A = K.Account;
+const guestBox = $("#account-guest"), userBox = $("#account-user");
+let me = null;
+
+function showAccount(user) {
+  me = user;
+  guestBox.hidden = Boolean(user); userBox.hidden = !user;
+  $("#account-title").replaceChildren(...(user ? [document.createTextNode("Olá, "), el("span", (user.name || "cliente").split(" ")[0] + ".")] : [document.createTextNode("Entre e tenha tudo "), el("span", "salvo.")]));
+  $("#account-lead").textContent = user ? "Seus pedidos, favoritos e endereço ficam salvos nesta conta, em qualquer aparelho." : "Com a conta, seus pedidos, favoritos e endereço ficam salvos e aparecem em qualquer aparelho. Comprar sem conta continua possível.";
+  if (!user) return;
+  $("#acc-name").textContent = user.name || "Sem nome"; $("#acc-email").textContent = user.email;
+  const f = $("#profile-form").elements, a = user.address || {};
+  f.name.value = user.name || ""; f.phone.value = user.phone || "";
+  ["postal_code", "state", "address", "address_number", "complement", "city"].forEach((k) => { f[k].value = a[k] || ""; });
+}
+
+function tab(which) {
+  const login = which === "login";
+  $("#tab-login").setAttribute("aria-selected", String(login)); $("#tab-register").setAttribute("aria-selected", String(!login));
+  $("#login-form").hidden = !login; $("#register-form").hidden = login;
+}
+$("#tab-login").addEventListener("click", () => tab("login"));
+$("#tab-register").addEventListener("click", () => tab("register"));
+
+async function afterAuth(user) {
+  showAccount(user); K.refreshAccount();
+  // Favoritos: junta os deste aparelho com os da conta e guarda nos dois lugares.
+  try {
+    const local = JSON.parse(localStorage.getItem("krypto-favorites-v1") || "[]").filter(Number.isSafeInteger);
+    const merged = [...new Set([...(user.favorites || []), ...local])];
+    localStorage.setItem("krypto-favorites-v1", JSON.stringify(merged));
+    if (merged.length !== (user.favorites || []).length) await A.call("favorites", "PUT", { ids: merged });
+  } catch (_) {}
+  await load();
+}
+
+$("#login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget.elements, fb = $("#login-feedback"), btn = e.currentTarget.querySelector('[type="submit"]');
+  btn.disabled = true; note(fb, "Entrando…");
+  try { const user = await A.call("login", "POST", { email: f.email.value, password: f.password.value }); f.password.value = ""; note(fb, ""); await afterAuth(user); }
+  catch (error) { note(fb, error.message, true); }
+  btn.disabled = false;
+});
+$("#register-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget.elements, fb = $("#register-feedback"), btn = e.currentTarget.querySelector('[type="submit"]');
+  if (!f.consent.checked) return note(fb, "Confirme a leitura da Política de Privacidade para criar a conta.", true);
+  btn.disabled = true; note(fb, "Criando sua conta…");
+  try {
+    const user = await A.call("register", "POST", { name: f.name.value, email: f.email.value, phone: f.phone.value, password: f.password.value, privacy_consent: true, website: f.website.value });
+    f.password.value = ""; note(fb, ""); await afterAuth(user);
+  } catch (error) { note(fb, error.message, true); }
+  btn.disabled = false;
+});
+$("#acc-logout").addEventListener("click", async () => { try { await A.call("logout", "POST"); } catch (_) {} showAccount(null); K.refreshAccount(); await load(); });
+
+$("#profile-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget.elements, fb = $("#profile-feedback");
+  note(fb, "Salvando…");
+  try {
+    const address = { name: f.name.value, phone: f.phone.value, postal_code: f.postal_code.value, address: f.address.value, address_number: f.address_number.value, complement: f.complement.value, city: f.city.value, state: f.state.value };
+    const user = await A.call("me", "PUT", { name: f.name.value, phone: f.phone.value, address });
+    showAccount(user); K.refreshAccount(); note(fb, "Dados salvos. Eles já vêm preenchidos no checkout.");
+  } catch (error) { note(fb, error.message, true); }
+});
+$("#password-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget.elements, fb = $("#password-feedback");
+  note(fb, "Trocando…");
+  try { await A.call("me", "PUT", { current_password: f.current_password.value, new_password: f.new_password.value }); f.current_password.value = ""; f.new_password.value = ""; note(fb, "Senha trocada."); }
+  catch (error) { note(fb, error.message, true); }
+});
+$("#claim-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget.elements, fb = $("#claim-feedback");
+  note(fb, "Vinculando…");
+  try { await A.call("claim", "POST", { code: f.code.value, email: f.email.value }); f.code.value = ""; note(fb, "Pedido vinculado à sua conta."); await load(); }
+  catch (error) { note(fb, error.message, true); }
+});
+
+A.me().then((user) => { if (user) afterAuth(user); else showAccount(null); });
 
 load().then(schedule);

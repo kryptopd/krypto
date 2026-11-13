@@ -33,6 +33,7 @@ module.exports = async function handler(req, res) {
     const items = S.parseItemsParam(req.query.items);
     if (!items.length) return res.status(400).json({ detail: "Sua sacola está vazia." });
     const lines = await S.priceLines(supabase, items);
-    return res.status(200).json(S.computeQuote(settings, req.query.state, lines));
+    const stateQuote = S.computeQuote(settings, req.query.state, lines);
+    return res.status(200).json(stateQuote);
   } catch (error) { return sendError(res, error); }
 };

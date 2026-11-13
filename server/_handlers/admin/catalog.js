@@ -15,7 +15,40 @@ module.exports = async function handler(req, res) {
 
     if (route === "upload") {
       if (req.method !== "POST") throw C.fail(405, "Método não permitido.");
-      return res.status(201).json(await C.uploadPhoto(supabase, body.data));
+      return res.status(201).json(await C.uploadPhoto(supabase, body.data, body.thumb));
+    }
+
+    // Importação em lote: o painel lê a planilha (CSV) e manda as linhas. Linhas com erro são devolvidas, as boas são criadas.
+    if (route === "import") {
+      if (req.method !== "POST") throw C.fail(405, "Método não permitido.");
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      if (!rows.length) throw C.fail(400, "A planilha está vazia.");
+      if (rows.length > 200) throw C.fail(400, "Importe no máximo 200 peças por vez.");
+      const { data: existing, error: catError } = await supabase.from("categories").select("name");
+      if (catError) throw C.isMissingSchema(catError) ? C.fail(503, C.MIGRATION_HINT) : catError;
+      const known = new Set((existing || []).map((c) => c.name.toLowerCase()));
+      const created = [], errors = [];
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i] || {}, line = i + 2;   // linha 1 é o cabeçalho
+        try {
+          const cat = String(r.category || "").trim();
+          if (cat && !known.has(cat.toLowerCase())) {
+            const ins = await supabase.from("categories").insert({ name: cat.slice(0, 40) }).select("name").single();
+            if (ins.error && ins.error.code !== "23505") throw ins.error;
+            known.add(cat.toLowerCase());
+          }
+          const sizes = String(r.sizes || "").split(/[,;|\s]+/).filter(Boolean);
+          const product = await C.normalizeProduct(supabase, {
+            name: r.name, category: cat, price: String(r.price || "").replace(",", "."), compare_at: String(r.compare_at || "").replace(",", "."),
+            stock: Number(r.stock || 0), sizes, images: r.image_url ? [r.image_url] : [], description: r.description,
+            composition: r.composition, care: r.care, weight_grams: r.weight_grams || ""
+          });
+          const { error } = await supabase.from("products").insert(product);
+          if (error) throw error;
+          created.push(product.name);
+        } catch (e) { errors.push({ line, name: String(r.name || ""), message: e.message || "Linha inválida." }); }
+      }
+      return res.status(200).json({ created: created.length, errors });
     }
 
     if (route === "categories") {
@@ -66,7 +99,7 @@ module.exports = async function handler(req, res) {
       const { data, error } = await supabase.from("products").update(patch).eq("id", id).select("*").single();
       if (error) throw error;
       // Fotos que saíram do produto também saem do Storage.
-      await C.removePhotos(supabase, oldUrls.filter((u) => !C.allPhotoUrls(patch).includes(u)));
+      await C.removePhotos(supabase, oldUrls.filter((u) => !C.allPhotoUrls(patch).includes(u)), { exceptId: id });
       return res.status(200).json(data);
     }
 

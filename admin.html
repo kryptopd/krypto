@@ -8,6 +8,7 @@
   <meta name="robots" content="noindex,nofollow">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/admin.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -60,6 +61,8 @@
       <button class="admin-tab" role="tab" type="button" id="tab-frete" aria-controls="panel-frete" data-tab="frete">Frete</button>
       <button class="admin-tab" role="tab" type="button" id="tab-pedidos" aria-controls="panel-pedidos" data-tab="pedidos">Pedidos</button>
       <button class="admin-tab" role="tab" type="button" id="tab-avaliacoes" aria-controls="panel-avaliacoes" data-tab="avaliacoes">Avaliações</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-relatorios" aria-controls="panel-relatorios" data-tab="relatorios">Relatórios</button>
+      <button class="admin-tab" role="tab" type="button" id="tab-contatos" aria-controls="panel-contatos" data-tab="contatos">Clientes</button>
       <button class="admin-tab" role="tab" type="button" id="tab-aviseme" aria-controls="panel-aviseme" data-tab="aviseme">Avise-me <b class="tab-count" id="alerts-tab-count" hidden>0</b></button>
       <button class="admin-tab" role="tab" type="button" id="tab-configuracoes" aria-controls="panel-configuracoes" data-tab="configuracoes">Configurações</button>
       <button class="admin-tab" role="tab" type="button" id="tab-atendimento" aria-controls="panel-atendimento" data-tab="atendimento">Atendimento</button>
@@ -73,6 +76,7 @@
           <label class="field">Nome do produto<input type="text" name="produto" placeholder="Ex.: Camiseta Essential" required></label>
           <label class="field">Categoria<select name="categoria"><option value="">Sem categoria</option></select><small class="field-help">Crie novas na aba <a href="#categorias" class="inline-link">Categorias</a>.</small></label>
           <label class="field">Preço (R$)<input type="number" name="preco" placeholder="0,00" min="0.01" step="0.01" required></label>
+          <label class="field">Preço original "de" (R$) <small class="optional">(opcional)</small><input type="number" name="preco_de" placeholder="Ex.: 199,90" min="0.01" step="0.01"><small class="field-help">Mostra o preço riscado e o selo de desconto na loja.</small></label>
           <label class="field">Peso (gramas)<input type="number" name="peso" placeholder="Ex.: 300" min="0" max="100000" step="1" value="300" required></label>
           <fieldset class="field editor-sizes">
             <legend>Tamanhos disponíveis</legend>
@@ -108,9 +112,32 @@
             <small class="field-help" id="stock-help">Preencha quantas peças existem de cada combinação. Quando uma combinação acaba, a loja marca só ela como esgotada.</small>
           </div>
           <label class="field editor-description">Descrição<textarea name="descricao" rows="3" placeholder="Conte um pouco sobre a peça..."></textarea></label>
+          <label class="field">Composição <small class="optional">(opcional)</small><textarea name="composicao" rows="2" maxlength="1000" placeholder="Ex.: 100% algodão, 220 g/m²"></textarea></label>
+          <label class="field">Cuidados <small class="optional">(opcional)</small><textarea name="cuidados" rows="2" maxlength="600" placeholder="Ex.: Lavar do avesso, água fria. Não usar alvejante."></textarea></label>
+          <label class="field">Publicar em <small class="optional">(opcional)</small><input type="datetime-local" name="publicar_em"><small class="field-help">Deixe vazio para publicar agora. Com data, a peça só aparece na loja a partir dela.</small></label>
+          <label class="check-card"><input type="checkbox" name="destaque"> <span><strong>Peça em destaque</strong><small>Aparece primeiro na seção de destaques da página inicial.</small></span></label>
         </div>
         <div class="editor-footer"><p class="form-note" id="product-feedback" role="status">Produtos cadastrados ficam visíveis na vitrine.</p><div class="editor-actions"><button class="button button-outline" type="reset">Limpar formulário</button><button class="button button-primary" type="submit">Cadastrar produto <span>↗</span></button></div></div>
       </form>
+    </section>
+
+    <section class="admin-panel import-panel">
+      <details class="import-details">
+        <summary>Importar várias peças por planilha (CSV)</summary>
+        <p class="panel-description">Baixe o modelo, preencha no Excel ou Google Planilhas, salve como CSV e envie aqui. Categorias novas são criadas sozinhas. As fotos entram por link (https). Depois você pode trocar as fotos pelo painel.</p>
+        <div class="import-actions">
+          <button class="button button-outline" type="button" id="import-template">Baixar modelo</button>
+          <button class="button button-outline" type="button" id="import-pick">Escolher arquivo CSV</button>
+          <input type="file" id="import-file" accept=".csv,text/csv" hidden>
+          <button class="button button-primary" type="button" id="import-run" hidden>Importar</button>
+        </div>
+        <p class="form-note" id="import-feedback" role="status" aria-live="polite"></p>
+      </details>
+    </section>
+
+    <section class="admin-panel low-stock-panel" id="low-stock-panel" hidden>
+      <div class="panel-heading"><div><span class="panel-kicker">ATENÇÃO</span><h2>Estoque baixo</h2><p class="panel-description">Combinações com poucas unidades. Reponha antes de esgotar.</p></div><span class="panel-count" id="low-stock-count">0</span></div>
+      <ul class="low-stock-list" id="low-stock-list"></ul>
     </section>
 
     <section class="admin-panel product-catalog-panel">
@@ -185,6 +212,21 @@
     <section class="admin-panel orders-panel">
       <div class="panel-heading"><div><span class="panel-kicker">ACOMPANHAMENTO</span><h2>Pedidos recentes</h2></div><span class="panel-count" id="orders-count">0 PEDIDOS</span></div>
       <p class="privacy-note">Quer ser avisado quando entrar pedido? Ative as notificações em <a href="#configuracoes" class="inline-link">Configurações</a>. Pedidos criados no checkout aparecem aqui. Os dados pessoais só podem ser acessados por este painel autenticado.</p>
+      <div class="orders-filters" id="orders-filters">
+        <div class="status-chips" id="status-chips" role="group" aria-label="Filtrar por status"></div>
+        <div class="orders-filter-row">
+          <label class="field orders-search">Buscar<input type="search" id="orders-q" placeholder="Código, nome, e-mail ou telefone" autocomplete="off"></label>
+          <label class="field">Pagamento<select id="orders-payment"><option value="">Todos</option><option value="pending">Pendente</option><option value="approved">Pago</option><option value="rejected">Recusado</option><option value="refunded">Reembolsado</option></select></label>
+          <label class="field">Forma<select id="orders-method"><option value="">Todas</option><option value="pix">PIX</option><option value="mercadopago">Cartão / Mercado Pago</option></select></label>
+          <label class="field">De<input type="date" id="orders-from"></label>
+          <label class="field">Até<input type="date" id="orders-to"></label>
+        </div>
+        <div class="orders-tools">
+          <button class="button button-outline" type="button" id="orders-clear">Limpar filtros</button>
+          <button class="button button-outline" type="button" id="orders-csv">Exportar planilha (CSV)</button>
+          <button class="button button-outline" type="button" id="orders-picklist">Romaneio de separação</button>
+        </div>
+      </div>
       <p class="form-note" id="orders-feedback" role="status" aria-live="polite"></p>
       <div class="table-wrap">
         <table class="orders-table">
@@ -192,6 +234,7 @@
           <tbody id="orders-table-body"></tbody>
         </table>
       </div>
+      <nav class="pager admin-pager" id="orders-pager" aria-label="Páginas de pedidos" hidden></nav>
     </section>
 
 
@@ -212,6 +255,35 @@
         <p class="form-note" id="support-admin-feedback" role="status" aria-live="polite"></p><div id="admin-support" class="moderation-list"></div>
       </section>
     </div>
+    <div class="admin-tab-panel" role="tabpanel" id="panel-relatorios" data-panel="relatorios" aria-labelledby="tab-relatorios" hidden>
+      <section class="admin-panel report-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">DESEMPENHO</span><h2>Relatórios de vendas</h2><p class="panel-description">Considera pedidos com pagamento aprovado e que não foram cancelados. Dias no horário de Brasília.</p></div>
+          <label class="field report-period">Período<select id="report-days"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="365">Últimos 12 meses</option></select></label></div>
+        <p class="form-note" id="report-feedback" role="status" aria-live="polite"></p>
+        <div class="kpi-row" id="report-kpis"></div>
+        <figure class="chart-card"><figcaption><strong id="chart-daily-title">Faturamento por dia</strong><small>Passe o mouse (ou use Tab) sobre as barras para ver os valores.</small></figcaption>
+          <div id="chart-daily" class="chart-box"></div>
+          <details class="chart-table"><summary>Ver como tabela</summary><div class="table-wrap"><table><thead><tr><th>Período</th><th>Pedidos</th><th>Faturamento</th></tr></thead><tbody id="chart-daily-table"></tbody></table></div></details>
+        </figure>
+        <div class="report-grid">
+          <figure class="chart-card"><figcaption><strong>Peças mais vendidas</strong><small>Por unidades no período</small></figcaption><div id="chart-top" class="hbars"></div></figure>
+          <figure class="chart-card"><figcaption><strong>Formas de pagamento e cupons</strong><small>Pedidos pagos</small></figcaption><div id="report-extra"></div></figure>
+        </div>
+      </section>
+    </div>
+
+    <div class="admin-tab-panel" role="tabpanel" id="panel-contatos" data-panel="contatos" aria-labelledby="tab-contatos" hidden>
+      <section class="admin-panel orders-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">RELACIONAMENTO</span><h2>Clientes e interessados</h2><p class="panel-description">Contas criadas na loja e e-mails cadastrados para receber novidades (com consentimento).</p></div><span class="panel-count" id="contacts-count">0 CONTATOS</span></div>
+        <div class="orders-tools"><button class="button button-outline" type="button" id="contacts-csv">Exportar planilha (CSV)</button></div>
+        <p class="form-note" id="contacts-feedback" role="status" aria-live="polite"></p>
+        <h3 class="sub-heading">Clientes com conta <span id="customers-count"></span></h3>
+        <div class="table-wrap"><table class="orders-table"><thead><tr><th>NOME</th><th>E-MAIL</th><th>TELEFONE</th><th>CADASTRO</th><th>ÚLTIMO ACESSO</th><th></th></tr></thead><tbody id="customers-body"></tbody></table></div>
+        <h3 class="sub-heading">Interessados em novidades <span id="subscribers-count"></span></h3>
+        <div class="table-wrap"><table class="orders-table"><thead><tr><th>E-MAIL</th><th>ORIGEM</th><th>CADASTRO</th><th></th></tr></thead><tbody id="subscribers-body"></tbody></table></div>
+      </section>
+    </div>
+
     <div class="admin-tab-panel" role="tabpanel" id="panel-aviseme" data-panel="aviseme" aria-labelledby="tab-aviseme" hidden>
       <section class="admin-panel orders-panel">
         <div class="panel-heading"><div><span class="panel-kicker">LISTA DE ESPERA</span><h2>Clientes esperando a peça voltar</h2><p class="panel-description">Quando um cliente pede "avise-me" numa peça esgotada, o e-mail entra aqui. Quando repuser o estoque, avise a lista e marque como avisados.</p></div><span class="panel-count" id="alerts-count">0 PEDIDOS</span></div>
@@ -240,8 +312,15 @@
             <div class="settings-grid">
               <label class="field">Desconto no PIX (%)<input type="number" name="pix_discount_percent" min="0" max="50" step="0.5" placeholder="0" inputmode="decimal"><small class="field-help">De 0 a 50. Vale sobre o valor das peças (não sobre o frete), só em pedidos pagos por PIX. Use 0 para não dar desconto.</small></label>
             </div>
+            <div class="first-order-block">
+              <label class="check-card"><input type="checkbox" name="fo_enabled"> <span><strong>Cupom de primeiro pedido</strong><small>Vale só para quem nunca comprou na loja (conferido pelo e-mail). Se o cadastro de novidades estiver ligado, quem se cadastra já recebe este cupom.</small></span></label>
+              <div class="settings-grid">
+                <label class="field">Código do cupom<input type="text" name="fo_code" maxlength="20" placeholder="PRIMEIRACOMPRA" autocomplete="off"></label>
+                <label class="field">Desconto (%)<input type="number" name="fo_percent" min="1" max="50" step="0.5" placeholder="10"></label>
+              </div>
+            </div>
             <div class="coupon-editor">
-              <span class="field-label">Cupons de desconto <small>(o desconto do cupom soma ao do PIX; o total nunca passa de 50%)</small></span>
+              <span class="field-label">Outros cupons de desconto <small>(valem para qualquer compra; somam ao desconto do PIX; o total nunca passa de 50%)</small></span>
               <div id="coupon-rows" class="coupon-rows"></div>
               <button class="button button-outline" type="button" id="coupon-add">+ Adicionar cupom</button>
             </div>
@@ -278,6 +357,22 @@
             <div class="banner-image-field">
               <span class="field-label">Imagem do banner <small>(opcional, formato horizontal)</small></span>
               <div class="banner-image-row"><div class="banner-preview" id="banner-preview" aria-hidden="true"></div><div><button class="button button-outline" type="button" id="banner-image-pick">Escolher imagem</button> <button class="button button-outline" type="button" id="banner-image-clear" hidden>Remover</button><input type="file" id="banner-image-input" accept="image/jpeg,image/png,image/webp" hidden><small class="field-help" id="banner-image-help"></small></div></div>
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-block">
+            <legend>Estoque e novidades por e-mail</legend>
+            <div class="settings-grid">
+              <label class="field">Avisar estoque baixo a partir de (unidades)<input type="number" name="low_stock_threshold" min="0" max="100" placeholder="3"><small class="field-help">Você recebe uma notificação quando uma venda deixa a peça com esse tanto ou menos.</small></label>
+            </div>
+            <label class="check-card"><input type="checkbox" name="newsletter_enabled"> <span><strong>Pedir e-mail para novidades na loja</strong><small>Mostra o convite (janela e faixa) e guarda os e-mails na aba Clientes, com consentimento. Com o cupom de primeiro pedido ativo, ele é oferecido no cadastro.</small></span></label>
+          </fieldset>
+
+          <fieldset class="settings-block">
+            <legend>Google: Search Console e Shopping</legend>
+            <div class="settings-grid">
+              <label class="field">Arquivo de verificação do Search Console<input type="text" name="google_verification" maxlength="80" placeholder="google1234abcd5678.html" autocomplete="off"><small class="field-help">No Search Console, escolha “Arquivo HTML” e cole aqui o nome do arquivo (começa com google). Se preferir, use a verificação por DNS e deixe vazio.</small></label>
+              <label class="field">Feed de produtos (Google Merchant e Instagram/Facebook Shopping)<input type="text" id="feed-url" readonly><small class="field-help">Cole este endereço no Google Merchant Center (Produtos → Feeds) e no Gerenciador de Catálogo da Meta. Atualiza sozinho.</small></label>
             </div>
           </fieldset>
 

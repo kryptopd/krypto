@@ -1,4 +1,4 @@
-const { money, Cart, colorsOf, imagesFor, coverFor, lineColorOk, productPath, maxQty } = window.Krypto;
+const { money, Cart, colorsOf, imagesFor, coverFor, lineColorOk, productPath, maxQty, thumbOf, priceBlock } = window.Krypto;
 let pixDiscountPercent = 0;
 window.Krypto.loadConfig().then((c) => { pixDiscountPercent = c.pix_discount_percent; if (products.length) { renderProducts(); renderNew(); } });
 const productGrid = document.querySelector("#product-grid");
@@ -22,6 +22,9 @@ const FAVORITES_KEY = "krypto-favorites-v1";
 const readIds = (key) => { try { const v = JSON.parse(localStorage.getItem(key) || "[]"); return Array.isArray(v) ? v.filter(Number.isSafeInteger) : []; } catch (_) { return []; } };
 let favorites = readIds(FAVORITES_KEY);
 const saveIds = (key, ids) => { try { localStorage.setItem(key, JSON.stringify(ids)); } catch (_) {} };
+// Com login, os favoritos também ficam na conta (sincroniza ao mudar e ao abrir a loja).
+let syncTimer = null;
+const syncFavorites = () => { clearTimeout(syncTimer); syncTimer = setTimeout(async () => { try { if (await window.Krypto.Account.me()) await window.Krypto.Account.call("favorites", "PUT", { ids: favorites }); } catch (_) {} }, 600); };
 const isFavorite = (id) => favorites.includes(id);
 function updateFavoritesUI() {
   const count = document.querySelector("#favorites-count");
@@ -31,7 +34,7 @@ function updateFavoritesUI() {
 }
 function toggleFavorite(id) {
   favorites = isFavorite(id) ? favorites.filter((x) => x !== id) : [...favorites, id];
-  saveIds(FAVORITES_KEY, favorites); updateFavoritesUI();
+  saveIds(FAVORITES_KEY, favorites); updateFavoritesUI(); syncFavorites();
   renderProducts();
   toast(isFavorite(id) ? "Peça adicionada aos favoritos." : "Peça removida dos favoritos.");
 }
@@ -82,10 +85,12 @@ function gallery(product, urls, href) {
   const track = el("div", undefined, "gallery-track");
   urls.forEach((url, i) => {
     const img = document.createElement("img");
-    img.src = url; img.alt = urls.length > 1 ? `${product.name}, foto ${i + 1} de ${urls.length}` : product.name;
+    img.src = thumbOf(url); img.onerror = () => { img.onerror = null; img.src = url; };
+    img.alt = urls.length > 1 ? `${product.name}, foto ${i + 1} de ${urls.length}` : product.name;
     img.loading = i === 0 ? "eager" : "lazy"; img.decoding = "async"; img.draggable = false;
     track.append(img);
   });
+  if (urls.length > 1) { track.tabIndex = 0; track.setAttribute("role", "group"); track.setAttribute("aria-label", `Fotos de ${product.name}. Use as setas do teclado para ver mais.`); }
   box.append(track);
   // Clicar na foto abre a página da peça (arrastar para trocar de foto não gera clique).
   if (href) { box.classList.add("is-link"); track.addEventListener("click", () => location.assign(href)); }
@@ -137,7 +142,7 @@ function productCard(product) {
   const title = el("h3"); const link = el("a", product.name); link.href = href; title.append(link);
   text.append(title);
   if (product.description) text.append(el("p", product.description, "product-desc"));
-  info.append(text, el("strong", money(product.price_cents), "product-price"));
+  info.append(text, priceBlock(product, "product-price"));
   if (pixDiscountPercent > 0) info.append(el("small", `${money(Math.round(product.price_cents * (1 - pixDiscountPercent / 100)))} no PIX (${String(pixDiscountPercent).replace(".", ",")}% off)`, "product-pix"));
 
   const buy = el("div", undefined, "product-buy");
@@ -339,7 +344,7 @@ window.Krypto.onHome = applyFromOutside;
     items.forEach((p, i) => {
       const li = el("li", undefined, "suggest-item"); li.id = `sg-${i}`; li.setAttribute("role", "option"); li.setAttribute("aria-selected", "false");
       const a = el("a"); a.href = productPath(p);
-      const thumb = el("span", undefined, "suggest-thumb"); thumb.style.backgroundImage = `url("${String(coverFor(p, (colorsOf(p)[0] || {}).name)).replace(/["\\]/g, "")}")`;
+      const thumb = el("span", undefined, "suggest-thumb"); thumb.style.backgroundImage = `url("${String(thumbOf(coverFor(p, (colorsOf(p)[0] || {}).name))).replace(/["\\]/g, "")}")`;
       const text = el("span", undefined, "suggest-text"); const name = el("strong"); name.append(highlight(p.name, q));
       text.append(name, el("small", p.category || "KRYPTO"));
       a.append(thumb, text, el("span", money(p.price_cents), "suggest-price"));
@@ -396,8 +401,12 @@ window.Krypto.loadShippingInfo().then((info) => {
 // ---------- Lançamentos, banner, avaliações e chamada final ----------
 function renderNew() {
   const section = document.querySelector("#novidades"), box = document.querySelector("#new-carousel");
-  const picks = products.slice(0, 8);   // a API já devolve do mais novo para o mais antigo
+  // Peças em destaque (marcadas no painel) vêm primeiro; o resto é do mais novo para o mais antigo.
+  const featured = products.filter((p) => p.featured);
+  const picks = [...featured, ...products.filter((p) => !p.featured)].slice(0, 8);
   if (picks.length < 4) { section.hidden = true; return; }
+  section.querySelector("h2").textContent = featured.length ? "Destaques" : "Lançamentos";
+  section.querySelector(".eyebrow").textContent = featured.length ? "SELECIONADAS PARA VOCÊ" : "RECÉM-CHEGADAS";
   box.replaceChildren(...picks.map((p) => window.Krypto.miniCard(p, pixDiscountPercent)));
   section.hidden = false;
   const step = () => Math.max(200, box.clientWidth * 0.85);
@@ -441,6 +450,70 @@ function renderHomeReviews() {
   }).catch(() => {});
 }
 
+// ---------- Novidades por e-mail (faixa na página + janela com oferta) ----------
+function setupNewsletter(cfg) {
+  if (!cfg.newsletter_enabled) return;
+  const welcome = cfg.welcome && cfg.welcome.percent ? cfg.welcome.percent : 0;
+  const offer = welcome ? `${String(welcome).replace(".", ",")}% de desconto na primeira compra` : "";
+  const band = document.querySelector("#newsletter-band");
+  if (welcome) { document.querySelector("#nl-title").textContent = `Ganhe ${String(welcome).replace(".", ",")}% off na primeira compra.`; document.querySelector("#nl-text").textContent = "Cadastre seu e-mail, receba o cupom na hora e fique por dentro dos lançamentos."; }
+  band.hidden = false;
+
+  async function subscribe(email, consent, trap, source, feedback, onDone) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { feedback("Informe um e-mail válido.", true); return; }
+    if (!consent) { feedback("Marque a caixa de consentimento para continuar.", true); return; }
+    feedback("Cadastrando…", false);
+    try {
+      const r = await fetch("/api/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, consent: true, source, website: trap }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || "Não foi possível cadastrar agora.");
+      try { localStorage.setItem("krypto-nl-done", "1"); if (data.coupon) sessionStorage.setItem("krypto-coupon", data.coupon.code); } catch (_) {}
+      onDone(data);
+    } catch (error) { feedback(error.message, true); }
+  }
+  const showDone = (data) => (data.coupon ? `Pronto! Seu cupom: ${data.coupon.code} (${String(data.coupon.percent).replace(".", ",")}% off${data.coupon.first_order ? " na primeira compra" : ""}). Já aplicamos no checkout.` : "Cadastro feito! Obrigado.");
+
+  // Faixa fixa na página
+  const form = document.querySelector("#nl-form"), fb = document.querySelector("#nl-feedback");
+  const say = (m, bad) => { fb.textContent = m; if (bad) fb.dataset.error = "true"; else delete fb.dataset.error; };
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    subscribe(document.querySelector("#nl-email").value.trim().toLowerCase(), document.querySelector("#nl-consent").checked, document.querySelector("#nl-trap").value, "faixa", say, (data) => { say(showDone(data)); form.querySelector("button").disabled = true; closePopup(); });
+  });
+
+  // Janela com a oferta: depois de uns segundos ou ao ir embora (computador); uma vez a cada 14 dias.
+  let shown = false, layer = null;
+  const dismissed = () => { try { return localStorage.getItem("krypto-nl-done") === "1" || Date.now() - Number(localStorage.getItem("krypto-nl-dismiss") || 0) < 14 * 24 * 3600 * 1000; } catch (_) { return false; } };
+  function closePopup() { if (layer) { layer.remove(); layer = null; document.removeEventListener("keydown", onKey); } }
+  const onKey = (e) => { if (e.key === "Escape") dismiss(); };
+  function dismiss() { try { localStorage.setItem("krypto-nl-dismiss", String(Date.now())); } catch (_) {} closePopup(); }
+  function openPopup() {
+    if (shown || dismissed() || document.body.classList.contains("drawer-open") || document.querySelector(".consent-bar")) return;
+    shown = true;
+    layer = el("div", undefined, "nl-layer"); layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-labelledby", "nlp-title");
+    const box = el("div", undefined, "nl-box");
+    const close = el("button", "×", "zoom-close nl-close"); close.type = "button"; close.setAttribute("aria-label", "Fechar");
+    const title = el("h2", offer ? `Ganhe ${String(welcome).replace(".", ",")}% off` : "Fique por dentro"); title.id = "nlp-title";
+    const text = el("p", offer ? "Cadastre seu e-mail e receba o cupom da primeira compra, além de lançamentos e peças limitadas." : "Receba lançamentos e peças limitadas em primeira mão.");
+    const f = el("form"); f.noValidate = true;
+    const input = el("input"); input.type = "email"; input.placeholder = "Seu e-mail"; input.autocomplete = "email"; input.setAttribute("aria-label", "Seu e-mail");
+    const trap = el("input", undefined, "honeypot"); trap.tabIndex = -1; trap.setAttribute("aria-hidden", "true");
+    const consentLabel = el("label", undefined, "nl-consent"); const consent = document.createElement("input"); consent.type = "checkbox";
+    consentLabel.append(consent, el("span", "Concordo em receber novidades da KRYPTO e com a Política de Privacidade. Posso sair quando quiser."));
+    const submit = el("button", "Quero receber", "button button-primary"); submit.type = "submit";
+    const msg = el("p", "", "form-note"); msg.setAttribute("role", "status");
+    const popSay = (m, bad) => { msg.textContent = m; if (bad) msg.dataset.error = "true"; else delete msg.dataset.error; };
+    f.addEventListener("submit", (e) => { e.preventDefault(); subscribe(input.value.trim().toLowerCase(), consent.checked, trap.value, "janela", popSay, (data) => { popSay(showDone(data)); submit.disabled = true; input.disabled = true; setTimeout(closePopup, 4500); say(showDone(data)); }); });
+    f.append(input, trap, consentLabel, submit, msg);
+    box.append(close, el("span", "NOVIDADES", "eyebrow"), title, text, f);
+    layer.append(box);
+    close.addEventListener("click", dismiss); layer.addEventListener("click", (e) => { if (e.target === layer) dismiss(); });
+    document.body.append(layer); document.addEventListener("keydown", onKey); input.focus();
+  }
+  setTimeout(openPopup, 25000);
+  document.addEventListener("mouseout", (e) => { if (!e.relatedTarget && e.clientY <= 0 && window.matchMedia("(hover: hover)").matches) openPopup(); });
+}
+
 // ---------- Carga inicial ----------
 function startCatalog(force) {
   productGrid.setAttribute("aria-busy", "true");
@@ -467,5 +540,11 @@ function startCatalog(force) {
   });
 }
 startCatalog();
-window.Krypto.loadConfig().then((cfg) => { renderBanner(cfg); renderContactCta(cfg); });
+window.Krypto.Account.me().then((me) => {
+  if (!me) return;
+  const merged = [...new Set([...(me.favorites || []), ...favorites])];
+  if (merged.length !== favorites.length) { favorites = merged; saveIds(FAVORITES_KEY, favorites); updateFavoritesUI(); if (products.length) renderProducts(); }
+  if (merged.length !== (me.favorites || []).length) syncFavorites();
+});
+window.Krypto.loadConfig().then((cfg) => { renderBanner(cfg); renderContactCta(cfg); setupNewsletter(cfg); });
 renderHomeReviews();

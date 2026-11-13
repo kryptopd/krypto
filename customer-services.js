@@ -7,7 +7,7 @@
   fetch("/api/reviews").then(r=>r.ok?r.json():[]).then(rows=>{
    const box=$("#approved-reviews");box.replaceChildren();
    if(!rows.length){box.textContent="Ainda não há avaliações publicadas. Seja a primeira pessoa a compartilhar sua experiência.";return;}
-   rows.forEach(r=>{const card=document.createElement("article");card.className="review-public";const h=document.createElement("h3");h.textContent=r.product_name;const star=document.createElement("div");star.className="review-stars";star.textContent=stars(r.rating);const p=document.createElement("p");p.textContent=r.comment;const small=document.createElement("small");small.textContent=`${r.customer_name} · ${new Date(r.created_at).toLocaleDateString("pt-BR")}`;card.append(h,star,p,small);box.append(card);});
+   rows.forEach(r=>{const card=document.createElement("article");card.className="review-public";const h=document.createElement("h3");h.textContent=r.product_name||"Avaliação";const star=document.createElement("div");star.className="review-stars";star.textContent=stars(r.rating);const p=document.createElement("p");p.textContent=r.comment;const small=document.createElement("small");small.textContent=`${r.customer_name} · ${new Date(r.created_at).toLocaleDateString("pt-BR")}`;card.append(h,star,p,small);box.append(card);});
   }).catch(()=>$("#approved-reviews").textContent="Não foi possível carregar as avaliações agora.");
   const lookup=$("#review-lookup");let verified=null;
   const pre=new URLSearchParams(location.search).get("pedido");if(pre)lookup.elements.order_code.value=pre.toUpperCase();

@@ -8,19 +8,13 @@ module.exports = async function handler(req, res) {
     const supabase = getSupabase();
     const [productsResult, ordersResult] = await Promise.all([
       supabase.from("products").select("*").order("created_at", { ascending: false }),
-      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(100)
+      supabase.from("orders").select("id,status,payment_status,total_cents").order("created_at", { ascending: false }).limit(5000)
     ]);
     if (productsResult.error) throw productsResult.error;
     if (ordersResult.error) throw ordersResult.error;
 
     const products = productsResult.data || [];
-    const orders = (ordersResult.data || []).map((order) => ({
-      ...order,
-      items: (order.items || []).map((item) =>
-        `${item.quantity}x ${item.name}${item.color ? ` - ${item.color}` : ""}${item.size ? ` (${item.size})` : ""}`
-      ).join(", ")
-    }));
-    const allOrders = orders;
+    const allOrders = ordersResult.data || [];   // só colunas dos indicadores; a lista de pedidos vem de /api/admin/orders
     const stats = {
       product_count: products.filter((p) => p.active).length,
       order_count: allOrders.length,
@@ -43,7 +37,7 @@ module.exports = async function handler(req, res) {
     else categories = categoriesResult.data || [];
     let shipping = null, shippingError = null;
     try { shipping = await readSettings(supabase); } catch (e) { shippingError = e.message; }
-    return res.status(200).json({ stats, products, orders, categories, categories_error: categoriesError, shipping, shipping_error: shippingError });
+    return res.status(200).json({ stats, products, categories, categories_error: categoriesError, shipping, shipping_error: shippingError });
   } catch (error) {
     return sendError(res, error);
   }

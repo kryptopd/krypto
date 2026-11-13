@@ -3,10 +3,30 @@ const { buildPixPayload } = require('../_lib/pix');
 const S = require('../_lib/shipping');
 const { readStoreSettings, findCoupon } = require('../_lib/settings');
 const Push = require('../_lib/push');
+const Customer = require('../_lib/customer');
 
 function validEmail(value) {
   return typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
+async function lowStockAlert(supabase, req, store, orderItems) {
+  try {
+    const threshold = Number(store.low_stock_threshold == null ? 3 : store.low_stock_threshold);
+    const ids = [...new Set(orderItems.map((l) => l.product_id))];
+    const { data, error } = await supabase.from("products").select("id,name,stock,variants").in("id", ids);
+    if (error || !data) return { sent: 0 };
+    const low = [];
+    for (const line of orderItems) {
+      const p = data.find((x) => x.id === line.product_id); if (!p) continue;
+      const variants = Array.isArray(p.variants) ? p.variants : [];
+      const v = variants.find((x) => (x.color || "") === (line.color || "") && (x.size || "") === (line.size || ""));
+      const left = variants.length ? (v ? Number(v.stock) : null) : Number(p.stock);
+      if (left !== null && left <= threshold) low.push(`${p.name}${[line.color, line.size].filter(Boolean).length ? ` (${[line.color, line.size].filter(Boolean).join(", ")})` : ""}: ${left === 0 ? "esgotou" : `restam ${left}`}`);
+    }
+    if (!low.length) return { sent: 0 };
+    return await Push.notifyAdmins(supabase, Push.subject(req), { title: "Estoque baixo", body: low.slice(0, 3).join(" · "), url: "/admin.html#produtos", tag: "estoque-baixo" });
+  } catch (e) { return { sent: 0 }; }
+}
+
 module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["POST"])) return;
   let createdPublicId = null;
@@ -53,7 +73,14 @@ module.exports = async function handler(req, res) {
     // Frete calculado aqui (estado + peso + regras de frete grátis). O navegador nunca informa o valor.
     const { configured, settings } = await S.readSettings(supabase);
     if (!configured) return res.status(503).json({ detail: "A loja ainda não configurou o frete. Tente novamente em breve." });
-    const quote = S.computeQuote(settings, uf, await S.priceLines(supabase, items));
+    const store = await readStoreSettings(supabase);
+    const lines = await S.priceLines(supabase, items);
+    // Peça com lançamento agendado ainda não pode ser comprada.
+    try {
+      const { data: sched } = await supabase.from("products").select("id,publish_at").in("id", [...new Set(items.map((i) => i.product_id))]);
+      if ((sched || []).some((p) => p.publish_at && new Date(p.publish_at) > new Date())) return res.status(409).json({ detail: "Uma das peças ainda não está disponível. Atualize a sacola." });
+    } catch (_) { /* banco sem a coluna: segue */ }
+    const quote = S.computeQuote(settings, uf, lines);
 
     const { error: expireError } = await supabase.rpc("expire_krypto_orders");
     if (expireError) throw expireError;
@@ -63,14 +90,19 @@ module.exports = async function handler(req, res) {
     if (openError) throw openError;
     if ((openOrders || 0) >= 3) return res.status(429).json({ detail: "Você já tem 3 pedidos aguardando pagamento. Pague ou aguarde expirarem para fazer outro." });
     // Desconto PIX definido no painel; o banco calcula o valor (o navegador nunca informa desconto).
-    const store = await readStoreSettings(supabase);
     const pixPercent = paymentMethod === "pix" ? Number(store.pix_discount_percent || 0) : 0;
     // Cupom (opcional): soma ao desconto do PIX. O banco limita o total a 50% do valor das peças.
-    let couponPercent = 0;
+    let couponPercent = 0, couponCode = "";
     if (String(body.coupon || "").trim()) {
       const coupon = findCoupon(store, body.coupon);
       if (!coupon) return res.status(400).json({ detail: "Esse cupom não é válido ou expirou. Remova-o ou confira o código." });
       couponPercent = coupon.percent;
+      couponCode = coupon.code;
+      if (coupon.first_order) {
+        const { count: prior, error: priorError } = await supabase.from("orders").select("id", { count: "exact", head: true }).ilike("email", buyerEmail).not("status", "in", "(cancelado,expirado)");
+        if (priorError) throw priorError;
+        if ((prior || 0) > 0) return res.status(400).json({ detail: "Esse cupom vale só na primeira compra." });
+      }
     }
     const pixDiscountPercent = Math.min(50, pixPercent + couponPercent);
     const { data, error } = await supabase.rpc("create_krypto_order_v2", {
@@ -84,7 +116,7 @@ module.exports = async function handler(req, res) {
       p_items: items,
       p_shipping_cents: quote.shipping_cents,
       p_privacy_acknowledged: true,
-      p_user_id: null,
+      p_user_id: await Customer.currentCustomerId(supabase, req),
       ...(pixDiscountPercent > 0 ? { p_pix_discount_percent: pixDiscountPercent } : {})
     });
     if (error) {
@@ -98,12 +130,18 @@ module.exports = async function handler(req, res) {
     }
     const order = Array.isArray(data) ? data[0] : data;
     createdPublicId = order.public_id;
+    // Registra o cupom e o frete escolhido (se o banco ainda não tem as colunas, o pedido segue normalmente).
+    const extra = await supabase.from("orders").update({ coupon_code: couponCode, shipping_service: String(quote.name || "").slice(0, 80), shipping_days: quote.days || null }).eq("public_id", order.public_id);
+    if (extra.error) console.error("[KRYPTO] Não foi possível gravar cupom/frete no pedido (migração 20261111 pendente?)", extra.error.message);
     // Se o banco ainda não recebeu a migração das cores, a cor escolhida se perderia no pedido: desfaz.
     if (items.some((it) => it.color) && !(order.order_items || []).every((line) => Object.prototype.hasOwnProperty.call(line, "color"))) {
       await supabase.rpc("cancel_krypto_order", { p_public_id: order.public_id, p_reason: "payment_setup_failed" });
       createdPublicId = null;
       return res.status(503).json({ detail: "As cores das peças estão sendo configuradas. Tente novamente em instantes." });
     }
+
+    // Estoque baixo: avisa o administrador quando a peça comprada ficou com poucas unidades.
+    await Push.withTimeout(lowStockAlert(supabase, req, store, order.order_items || []));
 
     if (paymentMethod === "pix") {
       // Marca o pedido como PIX (prazo de reserva maior e confirmação manual pelo painel).

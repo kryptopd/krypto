@@ -14,6 +14,7 @@ module.exports = async function handler(req, res) {
     }
     // Tenta o conjunto completo de colunas e recua se o banco ainda não recebeu alguma migração.
     const sets = [
+      "id,name,category,price_cents,stock,sizes,image_url,images,colors,variants,description,active,created_at,compare_at_cents,composition,care,featured,publish_at",
       "id,name,category,price_cents,stock,sizes,image_url,images,colors,variants,description,active,created_at",
       "id,name,category,price_cents,stock,sizes,image_url,images,colors,description,active,created_at",
       "id,name,category,price_cents,stock,sizes,image_url,images,description,active",
@@ -25,7 +26,10 @@ module.exports = async function handler(req, res) {
       if (!error || !["42703", "PGRST204"].includes(error.code)) break;
     }
     if (error) throw error;
-    return res.status(200).json(data || []);
+    // Lançamento agendado: só aparece depois da data de publicação.
+    const now = Date.now();
+    const visible = (data || []).filter((p) => !p.publish_at || new Date(p.publish_at).getTime() <= now).map((p) => { const { publish_at, ...rest } = p; return rest; });
+    return res.status(200).json(visible);
   } catch (error) {
     return sendError(res, error);
   }

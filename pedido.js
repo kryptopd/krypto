@@ -22,6 +22,34 @@ function renderProgress(status) {
   box.hidden = false;
 }
 
+// Histórico real (horários de cada etapa), quando o banco já registra os eventos.
+const EVENT_LABELS = { criado: "Pedido recebido", aguardando_pagamento: "Aguardando pagamento", pago: "Pagamento confirmado", confirmado: "Pedido confirmado", preparando: "Em preparação", enviado: "Pedido enviado", rastreio: "Código de rastreio informado", entregue: "Pedido entregue", cancelado: "Pedido cancelado", expirado: "Pedido expirado" };
+function renderTimeline(data) {
+  const box = $("#order-timeline"), list = $("#timeline-list"), track = $("#timeline-track");
+  const events = (data.events || []).filter((e, i, all) => EVENT_LABELS[e.status] && !(e.status === "aguardando_pagamento" && all[0] && all[0].status === "criado"));
+  box.hidden = events.length === 0;
+  list.replaceChildren();
+  events.forEach((e, i) => {
+    const li = document.createElement("li");
+    if (i === events.length - 1) li.className = "current";
+    const strong = document.createElement("strong"); strong.textContent = EVENT_LABELS[e.status];
+    const time = document.createElement("time"); time.dateTime = e.at; time.textContent = new Date(e.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    li.append(strong, time);
+    if (e.note) { const n = document.createElement("small"); n.textContent = e.note; li.append(n); }
+    list.append(li);
+  });
+  // Link de rastreio: o código funciona no site de rastreamento (Correios e outras transportadoras).
+  const code = String(data.tracking_code || "").trim();
+  track.hidden = !code;
+  track.replaceChildren();
+  if (code) {
+    track.append(document.createTextNode(`${data.shipping_provider || "Código de rastreio"}: `));
+    const b = document.createElement("strong"); b.textContent = code; track.append(b, document.createTextNode(" · "));
+    const a = document.createElement("a"); a.href = `https://melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = "Acompanhar a entrega ↗";
+    track.append(a);
+  }
+}
+
 function messageFor(data) {
   if (["cancelado", "expirado"].includes(data.status))
     return data.payment_method === "pix"
@@ -64,6 +92,7 @@ function render(data) {
   $("#order-discount-row").hidden = !data.discount_cents;
   $("#order-discount").textContent = data.discount_cents ? `− ${money(data.discount_cents)}` : "";
   trackPurchase(data);
+  renderTimeline(data);
   $("#review-cta").hidden = data.status !== "entregue";
   $("#review-cta").href = `avaliacoes.html?pedido=${encodeURIComponent(data.public_id)}`;
   $("#order-shipping").textContent = data.shipping_cents ? money(data.shipping_cents) : "Grátis";

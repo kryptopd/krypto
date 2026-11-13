@@ -17,6 +17,7 @@
     const stage = el("div", undefined, "pdp-stage");
     const track = el("div", undefined, "pdp-track");
     track.setAttribute("aria-label", `Fotos de ${product.name}`);
+    if (urls.length > 1) { track.tabIndex = 0; track.setAttribute("role", "group"); }
     urls.forEach((url, i) => {
       const img = document.createElement("img");
       img.src = url; img.decoding = "async"; img.draggable = false; img.loading = i ? "lazy" : "eager";

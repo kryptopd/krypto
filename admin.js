@@ -70,6 +70,8 @@ function renderProducts(products) {
     const stockClass = product.stock > 5 ? "stock-ok" : "stock-low";
     photo.append(element("span", `${product.stock} disponíveis`, `admin-stock ${stockClass}`));
 
+    if (product.featured) photo.append(element("span", "DESTAQUE", "product-tag admin-feature-tag"));
+    if (product.publish_at && new Date(product.publish_at) > new Date()) photo.append(element("span", `Publica em ${new Date(product.publish_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`, "product-tag admin-schedule-tag"));
     const details = element("div", undefined, "admin-product-details");
     details.append(
       element("span", (product.category || "Sem categoria").toUpperCase(), "admin-product-category"),
@@ -84,15 +86,20 @@ function renderProducts(products) {
       details.append(dots);
     }
     const bottom = element("div", undefined, "admin-product-bottom");
-    bottom.append(element("strong", money(product.price_cents)));
+    const priceBox = element("div"); priceBox.append(element("strong", money(product.price_cents)));
+    if (product.compare_at_cents) priceBox.append(element("small", ` de ${money(product.compare_at_cents)}`, "price-old"));
+    bottom.append(priceBox);
     const actions = element("div");
     const edit = element("button", "Editar", "admin-action");
     edit.type = "button";
     edit.addEventListener("click", () => editProduct(product));
+    const copy = element("button", "Duplicar", "admin-action");
+    copy.type = "button";
+    copy.addEventListener("click", () => duplicateProduct(product));
     const remove = element("button", "Excluir", "admin-action delete-action");
     remove.type = "button";
     remove.addEventListener("click", () => deleteProduct(product));
-    actions.append(edit, remove);
+    actions.append(edit, copy, remove);
     bottom.append(actions);
     details.append(bottom);
     card.append(photo, details);
@@ -277,10 +284,109 @@ function renderOrders(orders) {
       await loadDashboard();
     });
     statusCell.append(remove);
+    const label = element("button", "Etiqueta", "admin-action order-print"); label.type = "button";
+    label.addEventListener("click", () => printLabels([order]));
+    statusCell.append(label);
+    if (order.coupon_code) total.append(element("small", `Cupom ${order.coupon_code}`));
+    if (order.shipping_service) total.append(element("small", `Frete: ${order.shipping_service}`));
     row.append(id, customer, contact, address, items, total, statusCell);
     ordersBody.append(row);
   });
 }
+
+// ---------- Pedidos: busca, filtros, paginação, planilha e impressão ----------
+const STATUS_TABS = [["", "Todos"], ["aguardando_pagamento,aguardando", "Aguardando pagamento"], ["confirmado", "Pagos"], ["preparando", "Em preparação"], ["enviado", "Enviados"], ["entregue", "Entregues"], ["cancelado,expirado", "Cancelados/expirados"]];
+const of = { q: "", status: "", payment: "", method: "", from: "", to: "", page: 1, per: 20 };
+const ordersPager = document.querySelector("#orders-pager");
+const ordersQuery = (extra = {}) => {
+  const p = new URLSearchParams();
+  Object.entries({ ...of, ...extra }).forEach(([k, v]) => { if (v !== "" && v != null) p.set(k, v); });
+  return p.toString();
+};
+let lastOrders = [];
+async function loadOrders() {
+  const data = await api(`/api/admin/orders?${ordersQuery()}`);
+  lastOrders = data.orders;
+  renderOrders(data.orders);
+  document.querySelector("#orders-count").textContent = `${data.total} ${data.total === 1 ? "PEDIDO" : "PEDIDOS"}`;
+  // Abas de status com contagem.
+  const chips = document.querySelector("#status-chips"); chips.replaceChildren();
+  const sum = (keys) => keys.split(",").filter(Boolean).reduce((n, k) => n + (data.counts[k] || 0), 0);
+  const all = Object.values(data.counts).reduce((n, v) => n + v, 0);
+  STATUS_TABS.forEach(([value, label]) => {
+    const b = element("button", undefined, "status-chip"); b.type = "button"; b.setAttribute("aria-pressed", String(of.status === value));
+    b.append(document.createTextNode(label), element("b", String(value ? sum(value) : all)));
+    b.addEventListener("click", () => { of.status = value; of.page = 1; loadOrders().catch((e) => setMessage(ordersFeedback, e.message, true)); });
+    chips.append(b);
+  });
+  // Paginação
+  ordersPager.replaceChildren(); ordersPager.hidden = data.pages <= 1;
+  if (data.pages > 1) {
+    const btn = (text, n, o = {}) => { const b = element("button", text, `pager-btn${o.current ? " current" : ""}`); b.type = "button"; b.disabled = Boolean(o.disabled); if (o.current) b.setAttribute("aria-current", "page"); if (!o.disabled && !o.current) b.addEventListener("click", () => { of.page = n; loadOrders(); }); return b; };
+    ordersPager.append(btn("‹", of.page - 1, { disabled: of.page === 1 }));
+    const shown = [...new Set([1, data.pages, of.page, of.page - 1, of.page + 1].filter((n) => n >= 1 && n <= data.pages))].sort((a, b) => a - b);
+    let last = 0; shown.forEach((n) => { if (n - last > 1) ordersPager.append(element("span", "…", "pager-gap")); ordersPager.append(btn(String(n), n, { current: n === of.page })); last = n; });
+    ordersPager.append(btn("›", of.page + 1, { disabled: of.page === data.pages }));
+  }
+}
+let filterTimer = null;
+const refilter = () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => { of.page = 1; loadOrders().catch((e) => setMessage(ordersFeedback, e.message, true)); }, 350); };
+document.querySelector("#orders-q").addEventListener("input", (e) => { of.q = e.target.value.trim(); refilter(); });
+[["#orders-payment", "payment"], ["#orders-method", "method"], ["#orders-from", "from"], ["#orders-to", "to"]].forEach(([sel, key]) => document.querySelector(sel).addEventListener("change", (e) => { of[key] = e.target.value; refilter(); }));
+document.querySelector("#orders-clear").addEventListener("click", () => {
+  Object.assign(of, { q: "", status: "", payment: "", method: "", from: "", to: "", page: 1 });
+  ["#orders-q", "#orders-payment", "#orders-method", "#orders-from", "#orders-to"].forEach((s) => { document.querySelector(s).value = ""; });
+  loadOrders().catch((e) => setMessage(ordersFeedback, e.message, true));
+});
+
+// Baixa um arquivo da API (precisa do cabeçalho de login, por isso não é um link simples).
+async function downloadFile(path, filename) {
+  const r = await fetch(path, { headers: { Authorization: authorization } });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.detail || "Não foi possível baixar."); }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+}
+document.querySelector("#orders-csv").addEventListener("click", async () => {
+  try { setMessage(ordersFeedback, "Gerando planilha…"); await downloadFile(`/api/admin/orders?${ordersQuery({ export: "csv", page: "", per: "" })}`, `pedidos-krypto-${new Date().toISOString().slice(0, 10)}.csv`); setMessage(ordersFeedback, "Planilha baixada (abre no Excel). Vale o que está filtrado na tela."); }
+  catch (error) { setMessage(ordersFeedback, error.message, true); }
+});
+
+// Impressão: abre uma janela só com o conteúdo e chama a impressora.
+const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function printWindow(title, bodyHtml) {
+  const w = window.open("", "_blank");
+  if (!w) { setMessage(ordersFeedback, "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.", true); return; }
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+    body{font:13px/1.45 Arial,Helvetica,sans-serif;margin:0;color:#000}
+    .label{width:100mm;min-height:148mm;padding:7mm;box-sizing:border-box;page-break-after:always;border:1px solid #000;margin:0 0 4mm}
+    .label h1{font-size:15px;margin:0 0 4px;letter-spacing:.08em}.label .code{font:700 22px monospace;margin:2px 0 8px}
+    .label .to{border:2px solid #000;padding:6px;margin:8px 0;font-size:14px}.label .to b{font-size:16px}
+    .label table{width:100%;border-collapse:collapse}.label td{padding:2px 0;border-bottom:1px dotted #999}
+    .pick{padding:12mm;max-width:190mm}.pick h1{font-size:18px}.pick table{width:100%;border-collapse:collapse;margin:10px 0 20px}.pick th,.pick td{border:1px solid #444;padding:5px 7px;text-align:left}.pick th{background:#eee}
+    @media print{.noprint{display:none}.label{border:1px solid #000}}</style></head><body>
+    <p class="noprint" style="padding:8px;background:#ffd;border-bottom:1px solid #aa0">Use Ctrl+P (ou ⌘+P) para imprimir. Etiqueta pensada para papel 100×150 mm.</p>${bodyHtml}</body></html>`);
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
+function printLabels(orders) {
+  printWindow("Etiquetas KRYPTO", orders.map((o) => `<section class="label"><h1>KRYPTO · REMETENTE</h1><small>${esc(o.shipping_service || "Envio")}</small>
+    <div class="code">#${esc(o.public_id)}</div>
+    <div class="to">DESTINATÁRIO<br><b>${esc(o.customer_name)}</b><br>${esc(o.address)}, ${esc(o.address_number)}${o.complement ? ` — ${esc(o.complement)}` : ""}<br>${esc(o.city)} / ${esc(o.state)}<br><b>CEP ${esc(String(o.postal_code).replace(/^(\d{5})(\d{3})$/, "$1-$2"))}</b><br>Tel.: ${esc(o.phone)}</div>
+    <table>${(o.items_raw || []).map((i) => `<tr><td>${esc(i.quantity)}×</td><td>${esc(i.name)}${i.color ? ` · ${esc(i.color)}` : ""}${i.size ? ` · ${esc(i.size)}` : ""}</td></tr>`).join("")}</table>
+    ${o.tracking_code ? `<p>Rastreio: <b>${esc(o.shipping_provider || "")} ${esc(o.tracking_code)}</b></p>` : ""}</section>`).join(""));
+}
+document.querySelector("#orders-picklist").addEventListener("click", async () => {
+  try {
+    setMessage(ordersFeedback, "Montando o romaneio…");
+    const data = await api(`/api/admin/orders?${new URLSearchParams({ status: "confirmado,preparando", per: "100" })}`);
+    if (!data.orders.length) { setMessage(ordersFeedback, "Não há pedidos pagos para separar agora."); return; }
+    const sum = new Map();
+    data.orders.forEach((o) => (o.items_raw || []).forEach((i) => { const key = `${i.name}|${i.color || ""}|${i.size || ""}`; const r = sum.get(key) || { name: i.name, color: i.color || "", size: i.size || "", qty: 0 }; r.qty += Number(i.quantity || 0); sum.set(key, r); }));
+    const rows = [...sum.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    printWindow("Romaneio de separação KRYPTO", `<section class="pick"><h1>Romaneio de separação</h1><p>${data.orders.length} pedido(s) pagos aguardando envio · ${new Date().toLocaleString("pt-BR")}</p>
+      <h2>Peças a separar</h2><table><tr><th>Qtd.</th><th>Peça</th><th>Cor</th><th>Tamanho</th><th>✓</th></tr>${rows.map((r) => `<tr><td><b>${r.qty}</b></td><td>${esc(r.name)}</td><td>${esc(r.color)}</td><td>${esc(r.size)}</td><td></td></tr>`).join("")}</table>
+      <h2>Pedidos</h2><table><tr><th>Pedido</th><th>Cliente</th><th>Cidade/UF</th><th>Itens</th></tr>${data.orders.map((o) => `<tr><td>#${esc(o.public_id)}</td><td>${esc(o.customer_name)}</td><td>${esc(o.city)}/${esc(o.state)}</td><td>${esc(o.items)}</td></tr>`).join("")}</table></section>`);
+    setMessage(ordersFeedback, "");
+  } catch (error) { setMessage(ordersFeedback, error.message, true); }
+});
 
 // ---------- Frete e entrega ----------
 const UF_NAMES = { AC: "Acre", AL: "Alagoas", AP: "Amapá", AM: "Amazonas", BA: "Bahia", CE: "Ceará", DF: "Distrito Federal", ES: "Espírito Santo", GO: "Goiás", MA: "Maranhão", MT: "Mato Grosso", MS: "Mato Grosso do Sul", MG: "Minas Gerais", PA: "Pará", PB: "Paraíba", PR: "Paraná", PE: "Pernambuco", PI: "Piauí", RJ: "Rio de Janeiro", RN: "Rio Grande do Norte", RS: "Rio Grande do Sul", RO: "Rondônia", RR: "Roraima", SC: "Santa Catarina", SP: "São Paulo", SE: "Sergipe", TO: "Tocantins" };
@@ -480,11 +586,12 @@ async function loadDashboard() {
   document.querySelector("#stat-out-stock").textContent = `${data.stats.out_of_stock_count || 0} esgotados`;
   document.querySelector("#stat-ticket").textContent = money(data.stats.average_ticket_cents || 0);
   categories = data.categories || [];
-  renderProducts(data.products.filter((p) => p.active));   // "Excluir" só tira da vitrine; some também da lista do painel
+  renderProducts(data.products.filter((p) => p.active));
+  renderLowStock(data.products);   // "Excluir" só tira da vitrine; some também da lista do painel
   renderCategories(data.categories_error);
-  renderOrders(data.orders);
+  await loadOrders();
   renderShipping(data.shipping, data.shipping_error);
-  await Promise.all([loadReviews(), loadSupport(), loadSettings(), loadAlerts(), refreshPushUI()]);
+  await Promise.all([loadReviews(), loadSupport(), loadSettings(), loadAlerts(), refreshPushUI(), loadReport(), loadContacts()]);
 }
 
 async function tryLogin(email, password) {
@@ -541,6 +648,17 @@ async function initializeAuth() {
   }
 }
 
+// ISO -> valor do campo datetime-local (hora local).
+const toLocalInput = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+
+// Duplicar: abre o formulário como cadastro NOVO, com os mesmos dados (nome com "(cópia)"). As fotos são compartilhadas com segurança.
+function duplicateProduct(product) {
+  editProduct({ ...product, name: `${product.name} (cópia)`, featured: false, publish_at: null });
+  editingProductId = null;
+  productForm.querySelector('[type="submit"]').innerHTML = "Cadastrar cópia <span>↗</span>";
+  setMessage(productFeedback, `Duplicando ${product.name}. Ajuste o que for diferente e clique em Cadastrar cópia.`);
+}
+
 function editProduct(product) {
   editingProductId = product.id;
   productForm.elements.produto.value = product.name;
@@ -569,6 +687,10 @@ function editProduct(product) {
   }
   renderStockMatrix();
   productForm.elements.descricao.value = product.description;
+  productForm.elements.preco_de.value = product.compare_at_cents ? (product.compare_at_cents / 100).toFixed(2) : "";
+  productForm.elements.composicao.value = product.composition || ""; productForm.elements.cuidados.value = product.care || "";
+  productForm.elements.destaque.checked = Boolean(product.featured);
+  productForm.elements.publicar_em.value = product.publish_at ? toLocalInput(product.publish_at) : "";
   productForm.querySelector('[type="submit"]').innerHTML = "Salvar alterações <span>↗</span>";
   showTab("produtos");
   document.querySelector("#produtos").scrollIntoView({ behavior: "smooth" });
@@ -618,6 +740,10 @@ productForm.addEventListener("submit", async (event) => {
       ? { colors: colors.map((c) => ({ name: c.name.trim(), hex: c.hex, images: c.photos.map((p) => p.url) })) }
       : { images: colors[0].photos.map((p) => p.url), colors: [] }),
     description: form.get("descricao"),
+    compare_at: form.get("preco_de"),
+    composition: form.get("composicao"), care: form.get("cuidados"),
+    featured: Boolean(form.get("destaque")),
+    publish_at: form.get("publicar_em") ? new Date(form.get("publicar_em")).toISOString() : "",
   };
   const button = productForm.querySelector('[type="submit"]');
   button.disabled = true;
@@ -817,7 +943,8 @@ function removePhoto(id) {
   renderColorEditor();
 }
 
-// Lê a foto, reduz para no máximo 1400 px e converte em JPEG leve (cabe no limite de envio e carrega rápido na loja).
+// Lê a foto e gera duas versões em WebP (leve): grande (até 1400 px) e pequena (640 px) para os cartões da loja.
+// Navegador sem suporte a WebP: cai para JPEG, só com a versão grande.
 async function compressPhoto(file) {
   let bitmap;
   try { bitmap = await createImageBitmap(file); }
@@ -830,25 +957,33 @@ async function compressPhoto(file) {
     });
   }
   const width = bitmap.width || bitmap.naturalWidth, height = bitmap.height || bitmap.naturalHeight;
-  const scale = Math.min(1, 1400 / Math.max(width, height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(width * scale)); canvas.height = Math.max(1, Math.round(height * scale));
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);   // PNG com fundo transparente vira fundo branco
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const render = (maxSide) => {
+    const scale = Math.min(1, maxSide / Math.max(width, height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * scale)); canvas.height = Math.max(1, Math.round(height * scale));
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);   // PNG com fundo transparente vira fundo branco
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  };
+  const encode = (canvas, type, quality) => canvas.toDataURL(type, quality);
+  const big = render(1400);
+  let quality = 0.84, data = encode(big, "image/webp", quality), isWebp = data.startsWith("data:image/webp");
+  if (!isWebp) data = encode(big, "image/jpeg", quality);
+  while (data.length > 2400000 && quality > 0.5) { quality -= 0.1; data = encode(big, isWebp ? "image/webp" : "image/jpeg", quality); }
+  if (data.length > 2400000) { if (bitmap.close) bitmap.close(); throw new Error("A foto ficou grande demais. Tente outra."); }
+  let thumb = "";
+  if (isWebp) { thumb = encode(render(640), "image/webp", 0.8); if (!thumb.startsWith("data:image/webp")) thumb = ""; }
   if (bitmap.close) bitmap.close();
-  let quality = 0.85, dataUrl = canvas.toDataURL("image/jpeg", quality);
-  while (dataUrl.length > 2400000 && quality > 0.5) { quality -= 0.1; dataUrl = canvas.toDataURL("image/jpeg", quality); }
-  if (dataUrl.length > 2400000) throw new Error("A foto ficou grande demais. Tente outra.");
-  return dataUrl;
+  return { data, thumb };
 }
 
 async function uploadFile(color, file) {
   const photo = { id: nextPhotoId(), url: "", preview: URL.createObjectURL(file), pending: true };
   color.photos.push(photo); renderColorEditor();
   try {
-    const data = await compressPhoto(file);
-    const saved = await api(`${CATALOG_API}?r=upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
+    const { data, thumb } = await compressPhoto(file);
+    const saved = await api(`${CATALOG_API}?r=upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data, thumb }) });
     photo.url = saved.url; photo.pending = false;
   } catch (error) {
     color.photos = color.photos.filter((p) => p.id !== photo.id);
@@ -868,6 +1003,84 @@ photoInput.addEventListener("change", async () => {
   await Promise.all(files.slice(0, Math.max(0, room)).map((f) => uploadFile(color, f)));
 });
 resetColors();
+
+// ---------- Importar peças por planilha (CSV) ----------
+const importFile = document.querySelector("#import-file"), importRun = document.querySelector("#import-run"), importFeedback = document.querySelector("#import-feedback");
+let importRows = [];
+const IMPORT_HEADERS = ["nome", "categoria", "preco", "preco_de", "estoque", "tamanhos", "descricao", "composicao", "cuidados", "foto_url", "peso_gramas"];
+const plain = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9_]+/g, "_");
+function parseCsv(text) {
+  const clean = text.replace(/^\uFEFF/, "");
+  const first = clean.split(/\r?\n/)[0] || "";
+  const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ";" : ",";
+  const rows = []; let row = [], cell = "", quoted = false;
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean[i];
+    if (quoted) { if (c === '"') { if (clean[i + 1] === '"') { cell += '"'; i++; } else quoted = false; } else cell += c; }
+    else if (c === '"') quoted = true;
+    else if (c === sep) { row.push(cell); cell = ""; }
+    else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if (c !== "\r") cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((x) => String(x).trim() !== ""));
+}
+document.querySelector("#import-template").addEventListener("click", () => {
+  const sample = ["Camiseta Essential", "Camisetas", "129,90", "159,90", "20", "M G GG", "Algodão pesado, caimento oversized.", "100% algodão", "Lavar do avesso em água fria", "https://exemplo.com/foto.jpg", "300"];
+  const csv = `\uFEFF${IMPORT_HEADERS.join(";")}\n${sample.map((v) => `"${v}"`).join(";")}\n`;
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = "modelo-importacao-krypto.csv"; a.click(); URL.revokeObjectURL(a.href);
+});
+document.querySelector("#import-pick").addEventListener("click", () => importFile.click());
+importFile.addEventListener("change", async () => {
+  const file = importFile.files[0]; importFile.value = ""; importRun.hidden = true; importRows = [];
+  if (!file) return;
+  try {
+    const grid = parseCsv(await file.text());
+    if (grid.length < 2) throw new Error("A planilha precisa ter o cabeçalho e ao menos uma linha.");
+    const head = grid[0].map(plain);
+    if (!head.includes("nome") || !head.includes("preco")) throw new Error("Cabeçalho inválido. Baixe o modelo e use as mesmas colunas (nome e preco são obrigatórias).");
+    const col = (name) => head.indexOf(name);
+    importRows = grid.slice(1).map((r) => ({
+      name: r[col("nome")], category: r[col("categoria")], price: r[col("preco")], compare_at: r[col("preco_de")], stock: r[col("estoque")], sizes: r[col("tamanhos")],
+      description: r[col("descricao")], composition: r[col("composicao")], care: r[col("cuidados")], image_url: r[col("foto_url")], weight_grams: r[col("peso_gramas")],
+    }));
+    setMessage(importFeedback, `${importRows.length} ${importRows.length === 1 ? "linha pronta" : "linhas prontas"} para importar. Clique em Importar.`);
+    importRun.hidden = false;
+  } catch (error) { setMessage(importFeedback, error.message, true); }
+});
+importRun.addEventListener("click", async () => {
+  importRun.disabled = true; setMessage(importFeedback, "Importando…");
+  try {
+    const r = await api(`${CATALOG_API}?r=import`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: importRows }) });
+    const bad = r.errors.map((e) => `linha ${e.line}${e.name ? ` (${e.name})` : ""}: ${e.message}`).join(" · ");
+    setMessage(importFeedback, `${r.created} ${r.created === 1 ? "peça criada" : "peças criadas"}.${bad ? ` Não importadas: ${bad}` : ""}`, Boolean(bad));
+    importRun.hidden = true; importRows = [];
+    await loadDashboard();
+  } catch (error) { setMessage(importFeedback, error.message, true); }
+  finally { importRun.disabled = false; }
+});
+
+// ---------- Estoque baixo ----------
+let lowStockThreshold = 3;
+function renderLowStock(products) {
+  const panel = document.querySelector("#low-stock-panel"), list = document.querySelector("#low-stock-list");
+  const rows = [];
+  products.filter((p) => p.active).forEach((p) => {
+    const variants = Array.isArray(p.variants) ? p.variants : [];
+    if (variants.length) variants.forEach((v) => { if (Number(v.stock) <= lowStockThreshold) rows.push({ p, label: [v.color, v.size].filter(Boolean).join(" / ") || "Única", stock: Number(v.stock) }); });
+    else if (Number(p.stock) <= lowStockThreshold) rows.push({ p, label: "Total", stock: Number(p.stock) });
+  });
+  rows.sort((a, b) => a.stock - b.stock);
+  list.replaceChildren();
+  panel.hidden = rows.length === 0;
+  document.querySelector("#low-stock-count").textContent = `${rows.length} ${rows.length === 1 ? "ITEM" : "ITENS"}`;
+  rows.slice(0, 40).forEach(({ p, label, stock }) => {
+    const li = element("li", undefined, stock === 0 ? "is-out" : "");
+    li.append(element("strong", p.name), element("span", label), element("b", stock === 0 ? "Esgotado" : `${stock} un.`));
+    const b = element("button", "Repor", "admin-action"); b.type = "button"; b.addEventListener("click", () => editProduct(p));
+    li.append(b); list.append(li);
+  });
+}
 
 // ---------- Notificações do sistema (novos pedidos) ----------
 const pushStatus = document.querySelector("#push-status"), pushHelp = document.querySelector("#push-help");
@@ -948,7 +1161,6 @@ function addCouponRow(coupon = { code: "", percent: "", active: true }) {
   couponRows.append(row);
 }
 document.querySelector("#coupon-add").addEventListener("click", () => addCouponRow());
-
 function showBanner(url) {
   bannerImage = url || "";
   bannerPreview.style.backgroundImage = url ? `url("${url.replace(/["\\]/g, "")}")` : "";
@@ -962,7 +1174,7 @@ bannerInput.addEventListener("change", async () => {
   if (!file) return;
   setMessage(bannerHelp, "Enviando…");
   try {
-    const data = await compressPhoto(file);
+    const { data } = await compressPhoto(file);
     const saved = await api(`${CATALOG_API}?r=upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
     showBanner(saved.url); setMessage(bannerHelp, "Imagem enviada. Clique em salvar para publicar.");
   } catch (error) { setMessage(bannerHelp, error.message, true); }
@@ -978,7 +1190,14 @@ function fillSettings(s) {
   const b = s.banner || {};
   f.banner_enabled.checked = Boolean(b.enabled); f.banner_title.value = b.title || ""; f.banner_text.value = b.text || "";
   f.banner_cta_label.value = b.cta_label || ""; f.banner_cta_url.value = b.cta_url || ""; showBanner(b.image_url || "");
-  couponRows.replaceChildren(); (s.coupons || []).forEach(addCouponRow);
+  // O primeiro cupom "só primeira compra" aparece no bloco próprio; os demais ficam na lista.
+  const fo = (s.coupons || []).find((c) => c.first_order) || null;
+  f.fo_enabled.checked = Boolean(fo && fo.active); f.fo_code.value = fo ? fo.code : ""; f.fo_percent.value = fo ? fo.percent : "";
+  couponRows.replaceChildren(); (s.coupons || []).filter((c) => c !== fo).forEach(addCouponRow);
+  f.low_stock_threshold.value = s.low_stock_threshold ?? 3; lowStockThreshold = Number(f.low_stock_threshold.value) || 0;
+  f.newsletter_enabled.checked = Boolean(s.newsletter_enabled); f.google_verification.value = s.google_verification || "";
+  document.querySelector("#feed-url").value = `${location.origin}/feed/google.xml`;
+  if (lastProducts.length) renderLowStock(lastProducts);
 }
 async function loadSettings() {
   try { fillSettings(await api("/api/admin/settings")); } catch (error) { setMessage(settingsFeedback, error.message, true); }
@@ -986,7 +1205,10 @@ async function loadSettings() {
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const f = settingsForm.elements, button = settingsForm.querySelector('[type="submit"]');
-  const coupons = [...couponRows.querySelectorAll(".coupon-row")].map((row) => { const [code, percent, active] = row.querySelectorAll("input"); return { code: code.value, percent: percent.value, active: active.checked }; });
+  const coupons = [...couponRows.querySelectorAll(".coupon-row")].map((row) => { const [code, percent, active] = row.querySelectorAll("input"); return { code: code.value, percent: percent.value, active: active.checked, first_order: false }; });
+  const foCode = f.fo_code.value.trim();
+  if (f.fo_enabled.checked && (!foCode || !f.fo_percent.value)) { setMessage(settingsFeedback, "Para ligar o cupom de primeiro pedido, informe o código e o desconto.", true); return; }
+  if (foCode || f.fo_percent.value) coupons.push({ code: foCode, percent: f.fo_percent.value, active: f.fo_enabled.checked, first_order: true });
   button.disabled = true; setMessage(settingsFeedback, "Salvando…");
   try {
     const saved = await api("/api/admin/settings", {
@@ -997,6 +1219,8 @@ settingsForm.addEventListener("submit", async (event) => {
         legal_name: f.legal_name.value, cnpj: f.cnpj.value, address: f.address.value,
         banner: { enabled: f.banner_enabled.checked, title: f.banner_title.value, text: f.banner_text.value, cta_label: f.banner_cta_label.value, cta_url: f.banner_cta_url.value, image_url: bannerImage },
         coupons,
+        low_stock_threshold: f.low_stock_threshold.value, newsletter_enabled: f.newsletter_enabled.checked, welcome_coupon: f.fo_enabled.checked && f.newsletter_enabled.checked ? foCode.toUpperCase().replace(/[^A-Z0-9]/g, "") : "",
+        google_verification: f.google_verification.value,
       }),
     });
     fillSettings(saved);
@@ -1004,6 +1228,122 @@ settingsForm.addEventListener("submit", async (event) => {
   } catch (error) { setMessage(settingsFeedback, error.message, true); }
   finally { button.disabled = false; }
 });
+
+// ---------- Relatórios (gráficos simples, sem biblioteca) ----------
+const SVG = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs = {}) => { const n = document.createElementNS(SVG, tag); Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v)); return n; };
+const moneyCompact = (c) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 }).format(c / 100);
+const axisMoney = (c) => (c >= 1000000 ? moneyCompact(c) : money(c).replace(/,00$/, ""));
+function niceMax(v) { if (v <= 0) return 100; const p = 10 ** Math.floor(Math.log10(v)), n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+const reportTip = document.createElement("div"); reportTip.className = "chart-tip"; reportTip.hidden = true; document.body.append(reportTip);
+function showTip(x, y, value, label) { reportTip.replaceChildren(element("strong", value), element("span", label)); reportTip.hidden = false; reportTip.style.left = `${Math.min(window.innerWidth - 190, x + 14)}px`; reportTip.style.top = `${y + 14}px`; }
+const hideTip = () => { reportTip.hidden = true; };
+
+// Colunas: uma série só (faturamento), então sem legenda; o título diz o que é. Barras finas, topo arredondado, base reta.
+function columnChart(box, points) {
+  box.replaceChildren();
+  const W = 720, H = 250, L = 56, R = 8, T = 10, B = 30, iw = W - L - R, ih = H - T - B;
+  const max = niceMax(Math.max(...points.map((p) => p.value), 0));
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Gráfico de faturamento", class: "chart-svg" });
+  [0, 1, 2, 3, 4].forEach((i) => {
+    const y = T + ih - (ih * i) / 4;
+    svg.append(svgEl("line", { x1: L, x2: W - R, y1: y, y2: y, class: "grid" }));
+    const t = svgEl("text", { x: L - 8, y: y + 4, "text-anchor": "end", class: "axis" }); t.textContent = axisMoney((max * i) / 4); svg.append(t);
+  });
+  const slot = iw / points.length, bw = Math.min(24, Math.max(3, slot - 4));
+  const every = Math.ceil(points.length / 8);
+  points.forEach((p, i) => {
+    const h = max ? (p.value / max) * ih : 0, x = L + slot * i + (slot - bw) / 2, y = T + ih - h;
+    const g = svgEl("g", { tabindex: "0", role: "img", "aria-label": `${p.label}: ${money(p.value)}, ${p.orders} pedidos` });
+    const hit = svgEl("rect", { x: L + slot * i, y: T, width: slot, height: ih, fill: "transparent" });
+    if (h > 0) { const r = Math.min(4, bw / 2, h); g.append(svgEl("path", { d: `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${y + h} Z`, class: "bar" })); }
+    g.append(hit);
+    const enter = (e) => { const b = (e.target.closest("g") || g).getBoundingClientRect(); showTip(e.clientX || b.left + b.width / 2, e.clientY || b.top, money(p.value), `${p.label} · ${p.orders} ${p.orders === 1 ? "pedido" : "pedidos"}`); g.classList.add("hot"); };
+    g.addEventListener("pointermove", enter); g.addEventListener("focus", enter); g.addEventListener("pointerleave", () => { hideTip(); g.classList.remove("hot"); }); g.addEventListener("blur", () => { hideTip(); g.classList.remove("hot"); });
+    svg.append(g);
+    if (i % every === 0) { const t = svgEl("text", { x: x + bw / 2, y: H - 8, "text-anchor": "middle", class: "axis" }); t.textContent = p.short; svg.append(t); }
+  });
+  svg.append(svgEl("line", { x1: L, x2: W - R, y1: T + ih, y2: T + ih, class: "baseline" }));
+  box.append(svg);
+}
+
+let reportDays = 30;
+async function loadReport() {
+  try {
+    const r = await api(`/api/admin/reports?days=${reportDays}`);
+    const t = r.totals;
+    const kpis = document.querySelector("#report-kpis"); kpis.replaceChildren();
+    [["Faturamento", money(t.revenue_cents)], ["Pedidos pagos", String(t.paid_orders)], ["Ticket médio", money(t.avg_ticket_cents)], ["Descontos dados", money(t.discount_cents)], ["Pagos / criados", `${t.conversion_paid}%`]].forEach(([label, value]) => {
+      const k = element("div", undefined, "kpi"); k.append(element("span", label), element("strong", value)); kpis.append(k);
+    });
+    // Mais de 60 dias: agrupa por semana para as barras não ficarem minúsculas.
+    const fmt = (d) => new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    let points;
+    if (r.daily.length > 60) {
+      points = []; for (let i = 0; i < r.daily.length; i += 7) { const chunk = r.daily.slice(i, i + 7); points.push({ value: chunk.reduce((n, d) => n + d.revenue_cents, 0), orders: chunk.reduce((n, d) => n + d.orders, 0), label: `${fmt(chunk[0].date)} a ${fmt(chunk[chunk.length - 1].date)}`, short: fmt(chunk[0].date) }); }
+      document.querySelector("#chart-daily-title").textContent = "Faturamento por semana";
+    } else {
+      points = r.daily.map((d) => ({ value: d.revenue_cents, orders: d.orders, label: new Date(`${d.date}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }), short: fmt(d.date) }));
+      document.querySelector("#chart-daily-title").textContent = "Faturamento por dia";
+    }
+    columnChart(document.querySelector("#chart-daily"), points);
+    const body = document.querySelector("#chart-daily-table"); body.replaceChildren();
+    points.forEach((p) => { const tr = element("tr"); tr.append(element("td", p.label), element("td", String(p.orders)), element("td", money(p.value))); body.append(tr); });
+    // Peças mais vendidas: barras horizontais, valor na ponta.
+    const top = document.querySelector("#chart-top"); top.replaceChildren();
+    const maxUnits = Math.max(1, ...r.top_products.map((p) => p.units));
+    if (!r.top_products.length) top.append(element("p", "Ainda sem vendas no período.", "category-empty"));
+    r.top_products.forEach((p) => {
+      const row = element("div", undefined, "hbar"); row.tabIndex = 0; row.setAttribute("aria-label", `${p.name}: ${p.units} unidades, ${money(p.revenue_cents)}`);
+      const track = element("div", undefined, "hbar-track"); const fill = element("i"); fill.style.width = `${(p.units / maxUnits) * 100}%`; track.append(fill);
+      row.append(element("span", p.name, "hbar-name"), track, element("b", `${p.units} un.`));
+      row.title = `${p.name} · ${money(p.revenue_cents)}`;
+      top.append(row);
+    });
+    const extra = document.querySelector("#report-extra"); extra.replaceChildren();
+    const line = (a, b) => { const p = element("p", undefined, "report-line"); p.append(element("span", a), element("strong", b)); extra.append(p); };
+    line("PIX", `${r.by_method.pix.orders} pedidos · ${money(r.by_method.pix.revenue_cents)}`);
+    line("Cartão / Mercado Pago", `${r.by_method.mercadopago.orders} pedidos · ${money(r.by_method.mercadopago.revenue_cents)}`);
+    (r.coupons || []).slice(0, 6).forEach((c) => line(`Cupom ${c.code}`, `${c.orders} ${c.orders === 1 ? "uso" : "usos"}`));
+    setMessage(document.querySelector("#report-feedback"), "");
+  } catch (error) { setMessage(document.querySelector("#report-feedback"), error.message, true); }
+}
+document.querySelector("#report-days").addEventListener("change", (e) => { reportDays = Number(e.target.value); loadReport(); });
+
+// ---------- Clientes e interessados ----------
+async function loadContacts() {
+  const fb = document.querySelector("#contacts-feedback");
+  try {
+    const d = await api("/api/admin/contacts");
+    if (d.missing_migration) { setMessage(fb, "Execute a migração 20261111_growth.sql no Supabase para usar contas de clientes e cadastro de novidades.", true); return; }
+    setMessage(fb, "");
+    document.querySelector("#contacts-count").textContent = `${d.customers.length + d.subscribers.length} CONTATOS`;
+    document.querySelector("#customers-count").textContent = `(${d.customers.length})`; document.querySelector("#subscribers-count").textContent = `(${d.subscribers.length})`;
+    const when = (v) => (v ? new Date(v).toLocaleDateString("pt-BR") : "—");
+    const cb = document.querySelector("#customers-body"); cb.replaceChildren();
+    if (!d.customers.length) { const tr = element("tr"), td = element("td", "Nenhuma conta criada ainda."); td.colSpan = 6; tr.append(td); cb.append(tr); }
+    d.customers.forEach((c) => {
+      const tr = element("tr"); const act = element("td");
+      const reset = element("button", "Gerar senha temporária", "admin-action"); reset.type = "button";
+      reset.addEventListener("click", async () => {
+        if (!window.confirm(`Gerar uma senha temporária para ${c.email}? A senha atual deixa de valer. Envie a nova ao cliente (ex.: WhatsApp) e peça para trocá-la em Minha conta.`)) return;
+        try { const r = await api("/api/admin/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: c.id, action: "reset_password" }) }); window.prompt(`Senha temporária de ${c.email} (copie e envie ao cliente):`, r.temporary_password); }
+        catch (error) { setMessage(fb, error.message, true); }
+      });
+      act.append(reset);
+      tr.append(element("td", c.name || "—"), element("td", c.email), element("td", c.phone || "—"), element("td", when(c.created_at)), element("td", when(c.last_login_at)), act); cb.append(tr);
+    });
+    const sb = document.querySelector("#subscribers-body"); sb.replaceChildren();
+    if (!d.subscribers.length) { const tr = element("tr"), td = element("td", "Nenhum e-mail cadastrado ainda."); td.colSpan = 4; tr.append(td); sb.append(tr); }
+    d.subscribers.forEach((s) => {
+      const tr = element("tr"), act = element("td");
+      const del = element("button", "Remover", "admin-action delete-action"); del.type = "button";
+      del.addEventListener("click", async () => { if (!window.confirm(`Remover ${s.email} da lista (pedido de descadastro)?`)) return; try { await api(`/api/admin/contacts?subscriber=${s.id}`, { method: "DELETE" }); await loadContacts(); } catch (error) { setMessage(fb, error.message, true); } });
+      act.append(del); tr.append(element("td", s.email), element("td", s.source), element("td", when(s.created_at)), act); sb.append(tr);
+    });
+  } catch (error) { setMessage(fb, error.message, true); }
+}
+document.querySelector("#contacts-csv").addEventListener("click", async () => { try { await downloadFile("/api/admin/contacts?export=csv", `contatos-krypto-${new Date().toISOString().slice(0, 10)}.csv`); } catch (error) { setMessage(document.querySelector("#contacts-feedback"), error.message, true); } });
 
 // ---------- Avise-me (lista de espera) ----------
 const alertsBox = document.querySelector("#admin-alerts");
@@ -1101,7 +1441,7 @@ categoryForm.addEventListener("submit", async (event) => {
 });
 
 // ---------- Abas do painel ----------
-const TABS = ["produtos", "categorias", "frete", "pedidos", "avaliacoes", "aviseme", "configuracoes", "atendimento"];
+const TABS = ["produtos", "categorias", "frete", "pedidos", "relatorios", "contatos", "avaliacoes", "aviseme", "configuracoes", "atendimento"];
 const tabButtons = [...document.querySelectorAll(".admin-tab")];
 function showTab(name, { updateHash = true } = {}) {
   if (!TABS.includes(name)) name = "produtos";
