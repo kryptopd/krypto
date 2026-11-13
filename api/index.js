@@ -8,6 +8,7 @@ const handlers = {
   adminSettings: require("../server/_handlers/admin/settings"),
   adminAlerts: require("../server/_handlers/admin/alerts"),
   config: require("../server/_handlers/config"),
+  coupon: require("../server/_handlers/coupon"),
   stockAlert: require("../server/_handlers/stock-alert"),
   seo: require("../server/_handlers/seo"),
   adminReviews: require("../server/_handlers/admin/reviews"),
@@ -54,6 +55,7 @@ module.exports = async function handler(req, res) {
   else if (route === "support") target = handlers.support;
   else if (route === "shipping") target = handlers.shipping;
   else if (route === "config") target = handlers.config;
+  else if (route === "coupon") target = handlers.coupon;
   else if (route === "stock-alert") target = handlers.stockAlert;
   else if (route === "page/product") target = handlers.seo;
   else if (route === "page/sitemap") { req.query.kind = "sitemap"; target = handlers.seo; }

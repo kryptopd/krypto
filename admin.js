@@ -872,25 +872,79 @@ resetColors();
 // ---------- Configurações da loja ----------
 const settingsForm = document.querySelector("#settings-form");
 const settingsFeedback = document.querySelector("#settings-feedback");
-async function loadSettings() {
+const couponRows = document.querySelector("#coupon-rows");
+const bannerPreview = document.querySelector("#banner-preview");
+const bannerInput = document.querySelector("#banner-image-input");
+const bannerHelp = document.querySelector("#banner-image-help");
+const bannerClear = document.querySelector("#banner-image-clear");
+let bannerImage = "";
+
+function addCouponRow(coupon = { code: "", percent: "", active: true }) {
+  const row = element("div", undefined, "coupon-row");
+  const code = document.createElement("input"); code.type = "text"; code.maxLength = 20; code.placeholder = "CÓDIGO"; code.value = coupon.code; code.setAttribute("aria-label", "Código do cupom"); code.autocomplete = "off";
+  code.addEventListener("input", () => { code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
+  const percent = document.createElement("input"); percent.type = "number"; percent.min = "1"; percent.max = "50"; percent.step = "0.5"; percent.placeholder = "%"; percent.value = coupon.percent; percent.setAttribute("aria-label", "Desconto em porcentagem");
+  const active = document.createElement("input"); active.type = "checkbox"; active.checked = coupon.active !== false; active.setAttribute("aria-label", "Cupom ativo");
+  const activeLabel = element("label", undefined, "coupon-active"); activeLabel.append(active, element("span", "Ativo"));
+  const remove = element("button", "Remover", "admin-action delete-action"); remove.type = "button";
+  remove.addEventListener("click", () => row.remove());
+  row.append(code, percent, activeLabel, remove);
+  couponRows.append(row);
+}
+document.querySelector("#coupon-add").addEventListener("click", () => addCouponRow());
+
+function showBanner(url) {
+  bannerImage = url || "";
+  bannerPreview.style.backgroundImage = url ? `url("${url.replace(/["\\]/g, "")}")` : "";
+  bannerPreview.classList.toggle("has-image", Boolean(url));
+  bannerClear.hidden = !url;
+}
+document.querySelector("#banner-image-pick").addEventListener("click", () => bannerInput.click());
+bannerClear.addEventListener("click", () => showBanner(""));
+bannerInput.addEventListener("change", async () => {
+  const file = bannerInput.files[0]; bannerInput.value = "";
+  if (!file) return;
+  setMessage(bannerHelp, "Enviando…");
   try {
-    const s = await api("/api/admin/settings");
-    settingsForm.elements.pix_discount_percent.value = s.pix_discount_percent || "";
-    settingsForm.elements.ga_id.value = s.ga_id || "";
-    settingsForm.elements.pixel_id.value = s.pixel_id || "";
-  } catch (error) { setMessage(settingsFeedback, error.message, true); }
+    const data = await compressPhoto(file);
+    const saved = await api(`${CATALOG_API}?r=upload`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
+    showBanner(saved.url); setMessage(bannerHelp, "Imagem enviada. Clique em salvar para publicar.");
+  } catch (error) { setMessage(bannerHelp, error.message, true); }
+});
+
+function fillSettings(s) {
+  const f = settingsForm.elements;
+  f.pix_discount_percent.value = s.pix_discount_percent || "";
+  f.ga_id.value = s.ga_id || ""; f.pixel_id.value = s.pixel_id || "";
+  f.whatsapp.value = s.whatsapp || ""; f.whatsapp_message.value = s.whatsapp_message || "";
+  f.instagram.value = s.instagram ? s.instagram.replace(/^https?:\/\/(www\.)?instagram\.com\//, "@").replace(/\/$/, "") : "";
+  f.email.value = s.email || ""; f.legal_name.value = s.legal_name || ""; f.cnpj.value = s.cnpj || ""; f.address.value = s.address || "";
+  const b = s.banner || {};
+  f.banner_enabled.checked = Boolean(b.enabled); f.banner_title.value = b.title || ""; f.banner_text.value = b.text || "";
+  f.banner_cta_label.value = b.cta_label || ""; f.banner_cta_url.value = b.cta_url || ""; showBanner(b.image_url || "");
+  couponRows.replaceChildren(); (s.coupons || []).forEach(addCouponRow);
+}
+async function loadSettings() {
+  try { fillSettings(await api("/api/admin/settings")); } catch (error) { setMessage(settingsFeedback, error.message, true); }
 }
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const button = settingsForm.querySelector('[type="submit"]');
+  const f = settingsForm.elements, button = settingsForm.querySelector('[type="submit"]');
+  const coupons = [...couponRows.querySelectorAll(".coupon-row")].map((row) => { const [code, percent, active] = row.querySelectorAll("input"); return { code: code.value, percent: percent.value, active: active.checked }; });
   button.disabled = true; setMessage(settingsFeedback, "Salvando…");
   try {
     const saved = await api("/api/admin/settings", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pix_discount_percent: settingsForm.elements.pix_discount_percent.value, ga_id: settingsForm.elements.ga_id.value, pixel_id: settingsForm.elements.pixel_id.value }),
+      body: JSON.stringify({
+        pix_discount_percent: f.pix_discount_percent.value, ga_id: f.ga_id.value, pixel_id: f.pixel_id.value,
+        whatsapp: f.whatsapp.value, whatsapp_message: f.whatsapp_message.value, instagram: f.instagram.value, email: f.email.value,
+        legal_name: f.legal_name.value, cnpj: f.cnpj.value, address: f.address.value,
+        banner: { enabled: f.banner_enabled.checked, title: f.banner_title.value, text: f.banner_text.value, cta_label: f.banner_cta_label.value, cta_url: f.banner_cta_url.value, image_url: bannerImage },
+        coupons,
+      }),
     });
-    settingsForm.elements.pix_discount_percent.value = saved.pix_discount_percent || "";
-    setMessage(settingsFeedback, saved.pix_discount_percent > 0 ? `Salvo. Quem pagar no PIX ganha ${String(saved.pix_discount_percent).replace(".", ",")}% de desconto (a vitrine atualiza em até 1 minuto).` : "Salvo. O desconto no PIX está desligado.");
+    fillSettings(saved);
+    setMessage(settingsFeedback, "Configurações salvas. A loja atualiza em até 1 minuto.");
   } catch (error) { setMessage(settingsFeedback, error.message, true); }
   finally { button.disabled = false; }
 });

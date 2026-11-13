@@ -7,6 +7,7 @@
   <title>Administração — KRYPTO</title>
   <meta name="robots" content="noindex,nofollow">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -220,14 +221,62 @@
     </div>
     <div class="admin-tab-panel" role="tabpanel" id="panel-configuracoes" data-panel="configuracoes" aria-labelledby="tab-configuracoes" hidden>
       <section class="admin-panel">
-        <div class="panel-heading"><div><span class="panel-kicker">LOJA</span><h2>Configurações</h2><p class="panel-description">Desconto para quem paga no PIX e códigos para medir as visitas e as vendas.</p></div></div>
+        <div class="panel-heading"><div><span class="panel-kicker">LOJA</span><h2>Configurações</h2><p class="panel-description">Descontos e cupons, contato, dados da empresa, banner da home e medição de visitas.</p></div></div>
         <form id="settings-form" novalidate>
-          <div class="settings-grid">
-            <label class="field">Desconto no PIX (%)<input type="number" name="pix_discount_percent" min="0" max="50" step="0.5" placeholder="0" inputmode="decimal"><small class="field-help">De 0 a 50. Aplicado sobre o valor das peças (não sobre o frete), só em pedidos pagos por PIX. Use 0 para não dar desconto.</small></label>
-            <label class="field">Google Analytics (ID de medição)<input type="text" name="ga_id" maxlength="24" placeholder="G-XXXXXXXXXX" autocomplete="off"><small class="field-help">Opcional. Aparece em Google Analytics → Administrador → Fluxos de dados.</small></label>
-            <label class="field">Pixel da Meta (Facebook/Instagram)<input type="text" name="pixel_id" maxlength="20" placeholder="Somente números" inputmode="numeric" autocomplete="off"><small class="field-help">Opcional. Aparece no Gerenciador de Eventos da Meta.</small></label>
-          </div>
-          <p class="privacy-note">Os códigos de análise só são carregados depois que o visitante aceita os cookies no aviso da loja (LGPD). Visitantes que recusam não são medidos.</p>
+          <fieldset class="settings-block">
+            <legend>Desconto e cupons</legend>
+            <div class="settings-grid">
+              <label class="field">Desconto no PIX (%)<input type="number" name="pix_discount_percent" min="0" max="50" step="0.5" placeholder="0" inputmode="decimal"><small class="field-help">De 0 a 50. Vale sobre o valor das peças (não sobre o frete), só em pedidos pagos por PIX. Use 0 para não dar desconto.</small></label>
+            </div>
+            <div class="coupon-editor">
+              <span class="field-label">Cupons de desconto <small>(o desconto do cupom soma ao do PIX; o total nunca passa de 50%)</small></span>
+              <div id="coupon-rows" class="coupon-rows"></div>
+              <button class="button button-outline" type="button" id="coupon-add">+ Adicionar cupom</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-block">
+            <legend>Contato e redes sociais</legend>
+            <div class="settings-grid">
+              <label class="field">WhatsApp<input type="text" name="whatsapp" maxlength="30" placeholder="(11) 91234-5678" inputmode="tel" autocomplete="off"><small class="field-help">Com DDD. Aparece como botão flutuante na loja e no rodapé.</small></label>
+              <label class="field">Mensagem inicial do WhatsApp<input type="text" name="whatsapp_message" maxlength="200" placeholder="Olá! Vim pelo site da KRYPTO..."><small class="field-help">Texto que já vem escrito quando o cliente clica.</small></label>
+              <label class="field">Instagram<input type="text" name="instagram" maxlength="120" placeholder="@suamarca ou link do perfil" autocomplete="off"></label>
+              <label class="field">E-mail de contato<input type="email" name="email" maxlength="120" placeholder="contato@suamarca.com.br" autocomplete="off"></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-block">
+            <legend>Dados da empresa <small>(aparecem no rodapé)</small></legend>
+            <div class="settings-grid">
+              <label class="field">Razão social ou nome<input type="text" name="legal_name" maxlength="120" autocomplete="off"></label>
+              <label class="field">CNPJ<input type="text" name="cnpj" maxlength="30" placeholder="00.000.000/0000-00" inputmode="numeric" autocomplete="off"></label>
+              <label class="field">Endereço <small class="optional">(opcional)</small><input type="text" name="address" maxlength="200" placeholder="Rua, número, cidade/UF" autocomplete="off"></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-block">
+            <legend>Banner da página inicial</legend>
+            <label class="check-card"><input type="checkbox" name="banner_enabled"> <span><strong>Mostrar o banner na home</strong><small>Use para campanhas, lançamentos e promoções.</small></span></label>
+            <div class="settings-grid">
+              <label class="field">Título<input type="text" name="banner_title" maxlength="80" placeholder="Ex.: Drop 02 chegou"></label>
+              <label class="field">Texto<input type="text" name="banner_text" maxlength="220" placeholder="Ex.: Peças limitadas. Garanta a sua."></label>
+              <label class="field">Texto do botão<input type="text" name="banner_cta_label" maxlength="30" placeholder="Ex.: Ver peças"></label>
+              <label class="field">Link do botão<input type="text" name="banner_cta_url" maxlength="300" placeholder="/#colecao ou https://..."></label>
+            </div>
+            <div class="banner-image-field">
+              <span class="field-label">Imagem do banner <small>(opcional, formato horizontal)</small></span>
+              <div class="banner-image-row"><div class="banner-preview" id="banner-preview" aria-hidden="true"></div><div><button class="button button-outline" type="button" id="banner-image-pick">Escolher imagem</button> <button class="button button-outline" type="button" id="banner-image-clear" hidden>Remover</button><input type="file" id="banner-image-input" accept="image/jpeg,image/png,image/webp" hidden><small class="field-help" id="banner-image-help"></small></div></div>
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-block">
+            <legend>Medição de visitas e vendas</legend>
+            <div class="settings-grid">
+              <label class="field">Google Analytics (ID de medição)<input type="text" name="ga_id" maxlength="24" placeholder="G-XXXXXXXXXX" autocomplete="off"><small class="field-help">Opcional. Aparece em Google Analytics → Administrador → Fluxos de dados.</small></label>
+              <label class="field">Pixel da Meta (Facebook/Instagram)<input type="text" name="pixel_id" maxlength="20" placeholder="Somente números" inputmode="numeric" autocomplete="off"><small class="field-help">Opcional. Aparece no Gerenciador de Eventos da Meta.</small></label>
+            </div>
+            <p class="privacy-note">Os códigos de análise só são carregados depois que o visitante aceita os cookies no aviso da loja (LGPD).</p>
+          </fieldset>
           <div class="editor-footer"><p class="form-note" id="settings-feedback" role="status" aria-live="polite"></p><div class="editor-actions"><button class="button button-primary" type="submit">Salvar configurações <span>↗</span></button></div></div>
         </form>
       </section>
