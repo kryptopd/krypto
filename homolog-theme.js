@@ -1,8 +1,7 @@
-// Liga a camada de emoção/animação (homolog-fx.css/js) só quando o modo homologação está ligado neste navegador.
-// É só aparência: quem confirma a conta de desenvolvedor e bloqueia gravações é o servidor; shop.js desfaz tudo se não for.
+// Camada de emoção/animação da loja (homolog-fx.css/js): carregada para todos os visitantes.
+// É só aparência; respeita "reduzir movimento" do sistema. Nada aqui grava dados.
 (function () {
   try {
-    if (localStorage.getItem("krypto-homolog-ui") !== "1") return;
     var d = document, root = d.documentElement;
     root.classList.add("homolog-fx");
     var l = d.createElement("link"); l.rel = "stylesheet"; l.href = "/homolog-fx.css"; l.id = "homolog-fx-css"; d.head.appendChild(l);
