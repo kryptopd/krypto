@@ -22,6 +22,17 @@ const REGION_DEFAULTS = {
   N: { base_cents: 3490, per_kg_cents: 900, days: 12 }
 };
 
+// Frete "valor por km": cobra a distância de carro entre a loja e o cliente, só nas cidades listadas em rules.
+function defaultKm() {
+  return {
+    enabled: true,
+    name: "Entrega por km",
+    origin: { street: "Rua José dos Anjos", number: "115", postal_code: "36091205", city: "Juiz de Fora", state: "MG" },
+    rules: [{ city: "Juiz de Fora", state: "MG", per_km_cents: 100, min_cents: 0, days: 0 }]
+  };
+}
+const plain = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
 function defaultSettings() {
   const states = {};
   UFS.forEach((uf) => { states[uf] = { enabled: true, free: false, ...REGION_DEFAULTS[REGION_OF[uf]] }; });
@@ -31,7 +42,8 @@ function defaultSettings() {
     free_over_cents: 0,         // frete grátis a partir deste subtotal (0 = desligado)
     base_weight_grams: 1000,    // peso coberto pelo valor base do estado
     packaging_grams: 100,       // peso da embalagem somado a cada pedido
-    states
+    states,
+    km: defaultKm()
   };
 }
 
@@ -42,6 +54,28 @@ function int(value, label, min, max) {
     throw bad(`${label}: informe um número inteiro entre ${min} e ${max}.`);
   }
   return n;
+}
+
+function sanitizeKm(input) {
+  if (!input || typeof input !== "object") throw bad("Frete por km inválido.");
+  const o = input.origin && typeof input.origin === "object" ? input.origin : {};
+  const origin = {
+    street: String(o.street || "").trim().slice(0, 120), number: String(o.number || "").trim().slice(0, 20),
+    postal_code: String(o.postal_code || "").replace(/\D/g, "").slice(0, 8),
+    city: String(o.city || "").trim().slice(0, 80), state: String(o.state || "").trim().toUpperCase()
+  };
+  if (!origin.street || origin.postal_code.length !== 8 || !origin.city || !UF_NAMES[origin.state]) throw bad("Frete por km: informe rua, CEP, cidade e UF do endereço de saída da loja.");
+  const rules = (Array.isArray(input.rules) ? input.rules : []).slice(0, 30).map((r, i) => {
+    const state = String((r && r.state) || "").trim().toUpperCase(), city = String((r && r.city) || "").trim().slice(0, 80);
+    if (!city || !UF_NAMES[state]) throw bad(`Frete por km, cidade ${i + 1}: informe a cidade e a UF.`);
+    return {
+      city, state,
+      per_km_cents: int(r.per_km_cents, `${city} — valor por km`, 0, 100000),
+      min_cents: int(r.min_cents ?? 0, `${city} — valor mínimo`, 0, 1000000),
+      days: int(r.days ?? 0, `${city} — prazo (dias)`, 0, 90)
+    };
+  });
+  return { enabled: input.enabled !== false, name: String(input.name || "Entrega por km").trim().slice(0, 60) || "Entrega por km", origin, rules };
 }
 
 // Valida o que vem do painel (rigoroso) e devolve o objeto no formato salvo.
@@ -55,6 +89,7 @@ function sanitizeSettings(input) {
     packaging_grams: int(input.packaging_grams ?? 0, "Peso da embalagem (g)", 0, 100000),
     states: {}
   };
+  out.km = input.km === undefined ? defaultKm() : sanitizeKm(input.km);
   const given = input.states && typeof input.states === "object" ? input.states : {};
   for (const uf of UFS) {
     const s = given[uf];
@@ -76,6 +111,8 @@ function normalizeSettings(stored) {
   if (!stored || typeof stored !== "object") return base;
   const out = { ...base, ...stored, states: { ...base.states } };
   for (const uf of UFS) out.states[uf] = { ...base.states[uf], ...((stored.states || {})[uf] || {}) };
+  const k = stored.km && typeof stored.km === "object" ? stored.km : {};
+  out.km = { ...base.km, ...k, origin: { ...base.km.origin, ...(k.origin || {}) }, rules: Array.isArray(k.rules) ? k.rules : base.km.rules };
   return out;
 }
 
@@ -124,10 +161,45 @@ function computeQuote(settings, state, lines) {
   else if (rule.free) freeReason = "state";
   else if (settings.free_over_cents > 0 && subtotal >= settings.free_over_cents) freeReason = "threshold";
   return {
-    state: uf, name: settings.name, subtotal_cents: subtotal, weight_grams: weight, extra_kg: extraKg,
+    option: "standard", state: uf, name: settings.name, subtotal_cents: subtotal, weight_grams: weight, extra_kg: extraKg,
     calculated_cents: calculated, shipping_cents: freeReason ? 0 : calculated, free_reason: freeReason,
     days: rule.days || 0
   };
+}
+
+const subtotalOf = (lines) => lines.reduce((n, l) => n + l.price_cents * l.quantity, 0);
+
+// Regra do frete por km para a cidade do cliente (ou null se a cidade não é atendida por km).
+function findKmRule(settings, city, state) {
+  const km = settings.km;
+  if (!km || !km.enabled) return null;
+  const uf = normalizeUf(state);
+  return (km.rules || []).find((r) => plain(r.city) === plain(city) && r.state === uf) || null;
+}
+
+// Conta pura (sem internet): distanceKm já vem medida. Dá pra testar sozinha.
+function computeKmQuote(settings, rule, lines, distanceKm, approximate = false) {
+  const km = Math.round(distanceKm * 10) / 10;
+  const calculated = Math.max(rule.min_cents || 0, Math.round(km * rule.per_km_cents));
+  const subtotal = subtotalOf(lines);
+  let freeReason = null;
+  if (settings.free_shipping) freeReason = "all";
+  else if (settings.free_over_cents > 0 && subtotal >= settings.free_over_cents) freeReason = "threshold";
+  return {
+    option: "km", state: rule.state, city: rule.city, name: `${settings.km.name} (${rule.city})`, subtotal_cents: subtotal,
+    distance_km: km, approximate, per_km_cents: rule.per_km_cents,
+    calculated_cents: calculated, shipping_cents: freeReason ? 0 : calculated, free_reason: freeReason, days: rule.days || 0
+  };
+}
+
+// Mede a distância (internet) e monta a cotação por km. customer: { address, address_number, city, state, postal_code }
+async function quoteKm(settings, customer, lines) {
+  const rule = findKmRule(settings, customer.city, customer.state);
+  if (!rule) throw Object.assign(new Error("O frete por km não está disponível para essa cidade."), { statusCode: 422 });
+  const { drivingKm } = require("./distance");
+  const dest = { street: String(customer.address || "").split(" - ")[0], number: customer.address_number, city: customer.city, state: normalizeUf(customer.state), postal_code: customer.postal_code };
+  const { km, approximate } = await drivingKm(settings.km.origin, dest);
+  return computeKmQuote(settings, rule, lines, km, approximate);
 }
 
 // "12:2,15:1" -> [{ product_id: 12, quantity: 2 }, ...]
@@ -156,5 +228,5 @@ async function priceLines(supabase, items) {
 
 module.exports = {
   UF_NAMES, UFS, REGION_OF, defaultSettings, sanitizeSettings, normalizeSettings, readSettings, saveSettings,
-  normalizeUf, computeQuote, parseItemsParam, priceLines
+  normalizeUf, computeQuote, parseItemsParam, priceLines, defaultKm, sanitizeKm, findKmRule, computeKmQuote, quoteKm
 };

@@ -449,8 +449,47 @@ function renderShipping(shipping, error) {
     const opt = element("option", `${uf} — ${UF_NAMES[uf]}`); opt.value = uf; simState.append(opt);
   });
   simState.value = "SP";
+  renderKm(s.km);
   updateStatesMeta();
   simulate();
+}
+
+// ---- Frete por km ----
+const kmRows = document.querySelector("#km-rows");
+function kmRow(rule) {
+  const row = element("tr");
+  const cell = (node) => { const td = element("td"); td.append(node); row.append(td); };
+  const text = (name, value, width) => { const i = document.createElement("input"); i.type = "text"; i.name = name; i.value = value; i.setAttribute("aria-label", name); if (width) i.size = width; return i; };
+  const num = document.createElement("input"); num.type = "number"; num.name = "days"; num.min = "0"; num.max = "90"; num.value = rule.days || 0; num.setAttribute("aria-label", "Prazo (dias)");
+  const uf = text("uf", rule.state || "", 2); uf.maxLength = 2;
+  const remove = element("button", "Remover", "button button-outline"); remove.type = "button";
+  remove.addEventListener("click", () => row.remove());
+  [text("city", rule.city || ""), uf, text("per_km", toReais(rule.per_km_cents)), text("min", toReais(rule.min_cents)), num, remove].forEach(cell);
+  return row;
+}
+function renderKm(km) {
+  const f = shippingForm.elements, k = km || {}, o = k.origin || {};
+  f.km_enabled.checked = k.enabled !== false;
+  f.km_name.value = k.name || "Entrega por km";
+  f.km_street.value = o.street || ""; f.km_number.value = o.number || "";
+  f.km_cep.value = o.postal_code ? String(o.postal_code).replace(/^(\d{5})(\d{3})$/, "$1-$2") : "";
+  f.km_city.value = o.city || ""; f.km_uf.value = o.state || "";
+  kmRows.replaceChildren(...(k.rules || []).map(kmRow));
+}
+document.querySelector("#km-add").addEventListener("click", () => kmRows.append(kmRow({ city: "", state: "MG", per_km_cents: 100, min_cents: 0, days: 0 })));
+function collectKm() {
+  const f = shippingForm.elements;
+  const rules = [...kmRows.querySelectorAll("tr")].map((row) => {
+    const v = (n) => row.querySelector(`[name="${n}"]`).value;
+    const per = toCents(v("per_km")), min = toCents(v("min") || "0");
+    if (Number.isNaN(per) || Number.isNaN(min)) throw new Error("Frete por km: confira o valor por km e o mínimo (use números, ex.: 1,00).");
+    return { city: v("city").trim(), state: v("uf").trim().toUpperCase(), per_km_cents: per, min_cents: min, days: Number(v("days") || 0) };
+  });
+  return {
+    enabled: f.km_enabled.checked, name: f.km_name.value.trim() || "Entrega por km",
+    origin: { street: f.km_street.value.trim(), number: f.km_number.value.trim(), postal_code: f.km_cep.value.replace(/\D/g, ""), city: f.km_city.value.trim(), state: f.km_uf.value.trim().toUpperCase() },
+    rules
+  };
 }
 
 // Resumo mostrado quando a tabela de estados está recolhida.
@@ -462,7 +501,7 @@ function updateStatesMeta() {
 }
 
 // Lê o formulário no mesmo formato que a API valida.
-function collectShipping() {
+function collectShipping(withKm = true) {
   const f = shippingForm.elements;
   const settings = {
     name: f.name.value.trim() || "Frete padrão",
@@ -470,7 +509,8 @@ function collectShipping() {
     free_over_cents: f.free_over.value.trim() ? toCents(f.free_over.value) : 0,
     base_weight_grams: Number(f.base_weight.value),
     packaging_grams: Number(f.packaging.value || 0),
-    states: {}
+    states: {},
+    ...(withKm ? { km: collectKm() } : {})
   };
   if (Number.isNaN(settings.free_over_cents)) throw new Error("Frete grátis a partir de: valor inválido.");
   Object.keys(UF_NAMES).forEach((uf) => {
@@ -485,7 +525,7 @@ function collectShipping() {
 function simulate() {
   const out = document.querySelector("#sim-result");
   try {
-    const s = collectShipping(), uf = simState.value, rule = s.states[uf];
+    const s = collectShipping(false), uf = simState.value, rule = s.states[uf];
     if (!rule.enabled) { out.textContent = `Não entregamos em ${UF_NAMES[uf]}.`; return; }
     const weight = Math.max(0, Number(document.querySelector("#sim-weight").value) || 0) + s.packaging_grams;
     const subtotal = toCents(document.querySelector("#sim-subtotal").value) || 0;

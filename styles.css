@@ -428,6 +428,7 @@ tbody tr:last-child td { border-bottom: 0; }
 
 /* Forma de pagamento */
 .pay-options { border: 0; padding: 0; margin: 0 0 18px; display: grid; gap: 10px; min-width: 0; }
+.ship-legend { font: 600 13px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: #b8b0c2; padding: 0 0 10px; }
 .pay-option { display: block; cursor: pointer; position: relative; }
 .pay-option input { position: absolute; opacity: 0; pointer-events: none; }
 .pay-card { display: flex; flex-direction: column; gap: 6px; padding: 15px 16px 15px 46px; border: 1px solid #302c36; background: #111015; position: relative; transition: border-color .2s ease, background .2s ease; }
@@ -644,6 +645,11 @@ body.drawer-open { overflow: hidden; }
 .shipping-bulk, .shipping-sim { display: grid; grid-template-columns: auto repeat(3, minmax(0, 150px)) auto; gap: 14px; align-items: end; margin: 22px 0; padding: 16px; border: 1px dashed #38333f; }
 .shipping-bulk > strong, .shipping-sim > strong { align-self: center; font: 600 14px var(--font-display); }
 .shipping-bulk .button { min-height: 44px; }
+.shipping-km { display: grid; gap: 14px; margin: 22px 0; padding: 16px; border: 1px dashed #38333f; }
+.shipping-km > strong { font: 600 14px var(--font-display); }
+.shipping-km .shipping-general { margin: 0; }
+.shipping-km td input[name="city"] { min-width: 160px; }
+.shipping-km td input[name="uf"] { width: 56px; text-transform: uppercase; }
 .shipping-sim { grid-template-columns: auto minmax(0, 220px) minmax(0, 150px) minmax(0, 150px); }
 .sim-result { grid-column: 1 / -1; margin: 0; color: var(--green); font-size: 13.5px; line-height: 1.6; }
 .shipping-table th, .shipping-table td { padding: 8px 10px; }
