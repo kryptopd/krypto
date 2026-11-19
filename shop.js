@@ -257,10 +257,21 @@
         if (cfg.address) ld.address = { "@type": "PostalAddress", streetAddress: cfg.address, addressCountry: "BR" };
         const tag = document.createElement("script"); tag.type = "application/ld+json"; tag.textContent = JSON.stringify(ld).replace(/</g, "\\u003c"); document.head.append(tag);
       }
-      if (cfg.whatsapp) {
-        const wa = mk("a", undefined, "wa-float"); wa.href = waHref(cfg); wa.target = "_blank"; wa.rel = "noopener noreferrer"; wa.setAttribute("aria-label", "Falar com a KRYPTO no WhatsApp");
-        wa.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.3-4.1A8 8 0 1 1 8.2 18.9L4 20Z"/><path d="M9 9.5c.2 2.2 2.3 4.3 4.5 4.5l1.3-1.2-1.8-.9-.8.5c-.8-.4-1.5-1.1-1.9-1.9l.5-.8-.9-1.8L9 9.5Z"/></svg><span>WhatsApp</span>';
-        const wrap = mk("aside", undefined, "wa-wrap"); wrap.setAttribute("aria-label", "Atendimento por WhatsApp"); wrap.append(wa); document.body.append(wrap);
+      // Ícones flutuantes: cada um só aparece se o administrador preencheu o WhatsApp / o Instagram no painel.
+      const igLink = cfg.instagram && safeHref(cfg.instagram) ? cfg.instagram : "";
+      if (cfg.whatsapp || igLink) {
+        const group = mk("div", undefined, "social-float");
+        if (igLink) {
+          const ig = mk("a", undefined, "social-btn is-ig"); ig.href = igLink; ig.target = "_blank"; ig.rel = "noopener noreferrer"; ig.setAttribute("aria-label", "Instagram da KRYPTO"); ig.title = "Instagram";
+          ig.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4.5"/><circle cx="12" cy="12" r="3.6"/><circle cx="16.8" cy="7.2" r=".7"/></svg>';
+          group.append(ig);
+        }
+        if (cfg.whatsapp) {
+          const wa = mk("a", undefined, "social-btn is-wa"); wa.href = waHref(cfg); wa.target = "_blank"; wa.rel = "noopener noreferrer"; wa.setAttribute("aria-label", "Falar com a KRYPTO no WhatsApp"); wa.title = "WhatsApp";
+          wa.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.3-4.1A8 8 0 1 1 8.2 18.9L4 20Z"/><path d="M9 9.5c.2 2.2 2.3 4.3 4.5 4.5l1.3-1.2-1.8-.9-.8.5c-.8-.4-1.5-1.1-1.9-1.9l.5-.8-.9-1.8L9 9.5Z"/></svg>';
+          group.append(wa);
+        }
+        const wrap = mk("aside", undefined, "wa-wrap"); wrap.setAttribute("aria-label", "Contato e redes sociais"); wrap.append(group); document.body.append(wrap);
       }
       const col = document.querySelector("#footer-contact");
       const links = contactLinks(cfg, "");

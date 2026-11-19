@@ -450,6 +450,8 @@ function renderShipping(shipping, error) {
   });
   simState.value = "SP";
   renderKm(s.km);
+  const pk = s.pickup || {};
+  f.pickup_enabled.checked = pk.enabled !== false; f.pickup_name.value = pk.name || "Retirar na loja"; f.pickup_note.value = pk.note || "";
   updateStatesMeta();
   simulate();
 }
@@ -510,7 +512,7 @@ function collectShipping(withKm = true) {
     base_weight_grams: Number(f.base_weight.value),
     packaging_grams: Number(f.packaging.value || 0),
     states: {},
-    ...(withKm ? { km: collectKm() } : {})
+    ...(withKm ? { km: collectKm(), pickup: { enabled: f.pickup_enabled.checked, name: f.pickup_name.value.trim() || "Retirar na loja", note: f.pickup_note.value.trim() } } : {})
   };
   if (Number.isNaN(settings.free_over_cents)) throw new Error("Frete grátis a partir de: valor inválido.");
   Object.keys(UF_NAMES).forEach((uf) => {
