@@ -194,7 +194,6 @@
     Account.me().then((me) => {
       const on = Boolean(me && me.developer && me.homologation);
       try { if (on) localStorage.setItem(HOMOLOG_FLAG, "1"); else localStorage.removeItem(HOMOLOG_FLAG); } catch (_) {}
-      if (!on) { document.documentElement.classList.remove("homolog-theme"); const t = document.getElementById("homolog-theme-css"); if (t) t.remove(); }   // tema só no modo homologação
       if (!me || !me.developer) return;
       const bar = mk("div", undefined, on ? "dev-bar is-on" : "dev-bar"); bar.setAttribute("role", "region"); bar.setAttribute("aria-label", "Opções de desenvolvedor");
       const text = mk("span", on ? "MODO HOMOLOGAÇÃO ATIVO · nada do que você fizer é salvo na loja nem aparece para o admin" : "Opções de desenvolvedor");
