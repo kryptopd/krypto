@@ -45,6 +45,8 @@ module.exports = async function handler(req, res) {
         }, lines));
       } catch (e) { kmError = e.message; }
     }
+    const pickup = S.pickupQuote(settings, lines);
+    if (pickup) options.push(pickup);
     if (!options.length) throw standardError;
     return res.status(200).json({ ...options[0], options, km_error: kmError });
   } catch (error) { return sendError(res, error); }

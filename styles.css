@@ -1317,11 +1317,14 @@ body { letter-spacing: .005em; }
 @media (max-width: 650px) { .store-header .menu-toggle { order: 0; } .store-header .brand { order: 1; } }
 
 /* WhatsApp flutuante e rodapé */
-.wa-float { position: fixed; z-index: 80; right: 18px; bottom: 18px; display: inline-flex; align-items: center; gap: 9px; height: 50px; padding: 0 18px 0 14px; background: #25d366; color: #06210f; font: 700 13px var(--font-body); letter-spacing: .03em; border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,.45); transition: transform .15s ease; }
-.wa-float:hover { transform: translateY(-2px); }
-.wa-float svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-body.has-sticky .wa-float { bottom: 88px; }
-@media (max-width: 650px) { .wa-float span { display: none; } .wa-float { width: 52px; padding: 0; justify-content: center; } }
+.social-float { position: fixed; z-index: 80; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 10px; }
+.social-btn { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.45); transition: transform .15s ease; }
+.social-btn:hover { transform: translateY(-2px); }
+.social-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.social-btn.is-wa { background: #25d366; color: #06210f; }
+.social-btn.is-ig { background: linear-gradient(45deg, #f9a03c, #e1306c 55%, #7b3fe4); color: #fff; }
+.social-btn.is-ig circle:last-child { fill: currentColor; stroke: none; }
+body.has-sticky .social-float { bottom: 88px; }
 .footer-col a { display: block; }
 .footer-trust { display: grid; gap: 14px; padding: 22px 0; border-top: 1px solid #1d1a23; }
 .footer-pay { display: flex; flex-wrap: wrap; gap: 8px; }

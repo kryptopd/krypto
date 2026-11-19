@@ -31,6 +31,10 @@ function defaultKm() {
     rules: [{ city: "Juiz de Fora", state: "MG", per_km_cents: 100, min_cents: 0, days: 0 }]
   };
 }
+// Retirada na loja: sem frete, o cliente busca no endereço combinado.
+function defaultPickup() {
+  return { enabled: true, name: "Retirar na loja", note: "Rua José dos Anjos, 115 · Juiz de Fora/MG. Combinamos o horário pelo WhatsApp." };
+}
 const plain = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 
 function defaultSettings() {
@@ -43,7 +47,8 @@ function defaultSettings() {
     base_weight_grams: 1000,    // peso coberto pelo valor base do estado
     packaging_grams: 100,       // peso da embalagem somado a cada pedido
     states,
-    km: defaultKm()
+    km: defaultKm(),
+    pickup: defaultPickup()
   };
 }
 
@@ -54,6 +59,15 @@ function int(value, label, min, max) {
     throw bad(`${label}: informe um número inteiro entre ${min} e ${max}.`);
   }
   return n;
+}
+
+function sanitizePickup(input) {
+  if (!input || typeof input !== "object") throw bad("Retirada na loja inválida.");
+  return {
+    enabled: input.enabled !== false,
+    name: String(input.name || "Retirar na loja").trim().slice(0, 60) || "Retirar na loja",
+    note: String(input.note || "").trim().slice(0, 200)
+  };
 }
 
 function sanitizeKm(input) {
@@ -90,6 +104,7 @@ function sanitizeSettings(input) {
     states: {}
   };
   out.km = input.km === undefined ? defaultKm() : sanitizeKm(input.km);
+  out.pickup = input.pickup === undefined ? defaultPickup() : sanitizePickup(input.pickup);
   const given = input.states && typeof input.states === "object" ? input.states : {};
   for (const uf of UFS) {
     const s = given[uf];
@@ -113,6 +128,8 @@ function normalizeSettings(stored) {
   for (const uf of UFS) out.states[uf] = { ...base.states[uf], ...((stored.states || {})[uf] || {}) };
   const k = stored.km && typeof stored.km === "object" ? stored.km : {};
   out.km = { ...base.km, ...k, origin: { ...base.km.origin, ...(k.origin || {}) }, rules: Array.isArray(k.rules) ? k.rules : base.km.rules };
+  const p = stored.pickup && typeof stored.pickup === "object" ? stored.pickup : {};
+  out.pickup = { ...base.pickup, ...p };
   return out;
 }
 
@@ -192,6 +209,13 @@ function computeKmQuote(settings, rule, lines, distanceKm, approximate = false) 
   };
 }
 
+// Retirada na loja: sempre grátis. Retorna null se o administrador desligou.
+function pickupQuote(settings, lines) {
+  const p = settings.pickup;
+  if (!p || !p.enabled) return null;
+  return { option: "pickup", name: p.name, note: p.note || "", subtotal_cents: subtotalOf(lines), calculated_cents: 0, shipping_cents: 0, free_reason: "pickup", days: 0 };
+}
+
 // Mede a distância (internet) e monta a cotação por km. customer: { address, address_number, city, state, postal_code }
 async function quoteKm(settings, customer, lines) {
   const rule = findKmRule(settings, customer.city, customer.state);
@@ -228,5 +252,5 @@ async function priceLines(supabase, items) {
 
 module.exports = {
   UF_NAMES, UFS, REGION_OF, defaultSettings, sanitizeSettings, normalizeSettings, readSettings, saveSettings,
-  normalizeUf, computeQuote, parseItemsParam, priceLines, defaultKm, sanitizeKm, findKmRule, computeKmQuote, quoteKm
+  normalizeUf, computeQuote, parseItemsParam, priceLines, defaultKm, sanitizeKm, findKmRule, computeKmQuote, quoteKm, defaultPickup, sanitizePickup, pickupQuote
 };

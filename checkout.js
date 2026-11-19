@@ -110,7 +110,7 @@ function renderTotals(subtotal) {
   if (quoteError) { shipEl.textContent = "Indisponível"; $("#summary-total").textContent = money(base); return; }
   if (!quote) { shipEl.textContent = "Calculando…"; $("#summary-total").textContent = money(base); return; }
   shipEl.textContent = quote.shipping_cents ? money(quote.shipping_cents) : "Grátis";
-  const parts = [quote.option === "km" ? `${quote.city} · ${String(quote.distance_km).replace(".", ",")} km${quote.approximate ? " (estimado)" : ""}` : `${confirmed.state}`];
+  const parts = [quote.option === "km" ? `${quote.city} · ${String(quote.distance_km).replace(".", ",")} km${quote.approximate ? " (estimado)" : ""}` : quote.option === "pickup" ? "retirada na loja" : `${confirmed.state}`];
   if (quote.days) parts.push(`até ${quote.days} dias`);
   detail.textContent = `(${parts.join(" · ")})`;
   $("#summary-total").textContent = money(base + quote.shipping_cents);
@@ -187,7 +187,9 @@ function renderShipOptions() {
     const price = q.shipping_cents ? money(q.shipping_cents) : "Grátis";
     const detail = q.option === "km"
       ? `${String(q.distance_km).replace(".", ",")} km de distância × ${money(q.per_km_cents)} por km${q.approximate ? " (distância estimada)" : ""}`
-      : `Por estado e peso${q.days ? ` · até ${q.days} dias` : ""}`;
+      : q.option === "pickup"
+        ? (q.note || "Você busca o pedido na loja, sem custo de frete.")
+        : `Por estado e peso${q.days ? ` · até ${q.days} dias` : ""}`;
     card.append(el("strong", `${q.name} · ${price}`), el("small", detail));
     label.append(input, card);
     list.append(label);

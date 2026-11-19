@@ -215,6 +215,16 @@
           <button class="button button-outline" type="button" id="km-add">Adicionar cidade</button>
         </div>
 
+        <div class="shipping-km" id="shipping-pickup">
+          <strong>Retirar na loja</strong>
+          <p class="field-help">Terceira opção de frete: o cliente busca o pedido na loja, sem custo. Aparece para todos os clientes no checkout.</p>
+          <label class="check-card"><input type="checkbox" name="pickup_enabled"> <span><strong>Oferecer retirada na loja</strong><small>Desligue para esconder a opção.</small></span></label>
+          <div class="shipping-general">
+            <label class="field">Nome da opção<input type="text" name="pickup_name" maxlength="60" placeholder="Retirar na loja"></label>
+            <label class="field field-full">Endereço e instruções (aparece para o cliente)<input type="text" name="pickup_note" maxlength="200" placeholder="Rua José dos Anjos, 115 · Juiz de Fora/MG. Combinamos o horário pelo WhatsApp."></label>
+          </div>
+        </div>
+
         <div class="shipping-sim">
           <strong>Simulador</strong>
           <label class="field">Estado<select id="sim-state"></select></label>
