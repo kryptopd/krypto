@@ -95,3 +95,6 @@ html.homolog-fx .manifesto-image { transition: transform 1.6s var(--fx-ease); }
   html.homolog-fx *, html.homolog-fx *::before, html.homolog-fx *::after { animation-duration: .001ms !important; animation-delay: 0s !important; transition-duration: .001ms !important; transition-delay: 0s !important; }
   html.homolog-fx .fx-reveal, html.homolog-fx .hero .eyebrow, html.homolog-fx .hero-content > p, html.homolog-fx .hero-actions, html.homolog-fx .hero .fx-mask > * { opacity: 1 !important; transform: none !important; }
 }
+
+/* Só fotos reais das peças da loja: sem a foto de banco de imagens enquanto as peças carregam (ou se não houver nenhuma) */
+html.homolog-fx .hero .hero-image:not([style*="background-image"]) { background-image: none; background-color: #120f18; }
