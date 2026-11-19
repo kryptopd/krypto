@@ -15,8 +15,8 @@
     var letters = "KRYPTO".split("").map(function (c, i) { return '<span style="--i:' + i + '">' + c + "</span>"; }).join("");
     intro.innerHTML = '<div class="fx-intro-mark"><svg viewBox="0 0 38 32"><path d="M3 26 6 8l8 8 5-12 5 12 8-8 3 18Z"/></svg>' + letters + '</div><div class="fx-intro-bar"></div>';
     root.classList.add("fx-locked"); d.body ? d.body.appendChild(intro) : d.addEventListener("DOMContentLoaded", function () { d.body.appendChild(intro); });
-    setTimeout(function () { intro.classList.add("is-out"); go(); }, 1150);
-    setTimeout(function () { intro.remove(); }, 2200);
+    setTimeout(function () { intro.classList.add("is-out"); go(); }, 2200);
+    setTimeout(function () { intro.remove(); }, 3600);
     try { sessionStorage.setItem("krypto-fx-intro", "1"); } catch (_) {}
   } else { go(); }
 
