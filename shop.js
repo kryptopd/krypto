@@ -194,6 +194,7 @@
     Account.me().then((me) => {
       const on = Boolean(me && me.developer && me.homologation);
       try { if (on) localStorage.setItem(HOMOLOG_FLAG, "1"); else localStorage.removeItem(HOMOLOG_FLAG); } catch (_) {}
+      if (!on) { document.documentElement.classList.remove("homolog-fx", "fx-locked"); ["homolog-fx-css", "homolog-fx-js"].forEach((id) => { const t = document.getElementById(id); if (t) t.remove(); }); document.querySelectorAll(".fx-intro, .fx-progress, .fx-marquee, .hero-glow, .fx-scroll").forEach((n) => n.remove()); }   // animações só no modo homologação
       if (!me || !me.developer) return;
       const bar = mk("div", undefined, on ? "dev-bar is-on" : "dev-bar"); bar.setAttribute("role", "region"); bar.setAttribute("aria-label", "Opções de desenvolvedor");
       const text = mk("span", on ? "MODO HOMOLOGAÇÃO ATIVO · nada do que você fizer é salvo na loja nem aparece para o admin" : "Opções de desenvolvedor");
