@@ -1,0 +1,114 @@
+/* Tema "Campos" — só aparece no MODO HOMOLOGAÇÃO (html.homolog-theme, ligado por homolog-theme.js).
+   Traz o estilo do campos-store (tipografia serifada elegante, cabeçalho centralizado, botões em pílula com
+   preenchimento deslizante, cartões de produto limpos, rodapé com a marca grande).
+   AS CORES NÃO MUDAM: fundo escuro e roxo do Krypto continuam exatamente os mesmos. */
+
+@font-face { font-family: "Cormorant Garamond"; src: url("/fonts/cormorant-garamond.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Cormorant Garamond"; src: url("/fonts/cormorant-garamond-italic.woff2") format("woff2"); font-weight: 300 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Jost"; src: url("/fonts/jost.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+
+html.homolog-theme {
+  --font-display: "Cormorant Garamond", "Times New Roman", Georgia, serif;
+  --font-body: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ease-luxe: cubic-bezier(.22, 1, .36, 1);
+  --th-gutter: clamp(20px, 4vw, 56px);
+}
+html.homolog-theme body { font-family: var(--font-body); font-size: 16px; font-weight: 400; }
+html.homolog-theme :is(h1, h2, h3, h4) { font-family: var(--font-display); font-weight: 400; letter-spacing: -.01em; text-transform: none; }
+html.homolog-theme :is(.product-price, .summary-total strong, .cart-total, [class*="price"]) { font-family: var(--font-body); letter-spacing: 0; }
+
+/* ---------- Faixa de avisos ---------- */
+html.homolog-theme .announce { height: 36px; display: flex; align-items: center; justify-content: center; padding: 0 16px; font: 500 10.5px var(--font-body); letter-spacing: .3em; border-bottom: 0; }
+
+/* ---------- Cabeçalho: menu à esquerda, marca ao centro, ações à direita ---------- */
+html.homolog-theme .store-header { position: sticky; display: flex; align-items: center; height: 88px; padding: 0 var(--th-gutter); gap: 28px; }
+html.homolog-theme .store-header .brand { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 500 32px var(--font-display); letter-spacing: .14em; margin: 0; transition: transform .7s var(--ease-luxe); }
+html.homolog-theme .store-header .brand:hover { transform: translate(-50%, -50%) scale(1.03); }
+html.homolog-theme .store-header .brand-crown { width: 24px; height: 20px; }
+html.homolog-theme .store-header .main-nav { margin: 0; gap: 36px; }
+html.homolog-theme .store-header .main-nav a { font: 500 11.5px var(--font-body); letter-spacing: .22em; color: #e8e4ec; }
+html.homolog-theme .store-header .main-nav a::after { bottom: -1px; transition: transform .6s var(--ease-luxe); }
+html.homolog-theme .header-search { margin-left: 0; max-width: 220px; flex: 0 1 220px; }
+html.homolog-theme .header-search input { height: 44px; border-radius: 999px; padding-left: 44px; font: 400 13px var(--font-body); }
+html.homolog-theme .header-search svg { left: 16px; }
+html.homolog-theme .header-actions { gap: 4px; margin-left: auto; }
+html.homolog-theme .header-account, html.homolog-theme .store-header .header-cart { border: 0; border-radius: 999px; padding: 0 14px; height: 44px; font: 500 11.5px var(--font-body); letter-spacing: .22em; text-transform: uppercase; transition: background-color .4s var(--ease-luxe); }
+html.homolog-theme .header-account { display: inline-flex; align-items: center; gap: 10px; }
+html.homolog-theme .header-account:hover, html.homolog-theme .store-header .header-cart:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+
+/* ---------- Eyebrow com fio ---------- */
+html.homolog-theme .eyebrow { display: flex; align-items: center; gap: 16px; font: 500 11px var(--font-body); letter-spacing: .32em; text-transform: uppercase; }
+html.homolog-theme .eyebrow-line { width: 40px; }
+html.homolog-theme .hero .eyebrow::before { content: ""; width: 40px; height: 1px; background: var(--purple-bright); flex: none; }
+
+/* ---------- Botões em pílula com preenchimento deslizante ---------- */
+html.homolog-theme .button { position: relative; isolation: isolate; overflow: hidden; min-height: 56px; padding: 0 32px; gap: .85rem; border-radius: 999px; font: 500 11.5px var(--font-body); letter-spacing: .24em; text-transform: uppercase; transition: color .5s var(--ease-luxe), border-color .5s var(--ease-luxe), transform .5s var(--ease-luxe), background-color .5s var(--ease-luxe); }
+html.homolog-theme .button::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; transform: translate3d(0, 101%, 0); transition: transform .6s var(--ease-luxe); }
+html.homolog-theme .button:hover::before { transform: translate3d(0, 0, 0); }
+html.homolog-theme .button:active { transform: scale(.98); }
+html.homolog-theme .button-primary:hover { background: #9140e8; }
+html.homolog-theme .button-primary::before { background: #7f31d6; }
+html.homolog-theme .button-light:hover { background: #f3f0f5; }
+html.homolog-theme .button-light::before { background: #fff; }
+html.homolog-theme .button-ghost:hover, html.homolog-theme .button-outline:hover { background: transparent; }
+html.homolog-theme .button-ghost::before { background: #fff; }
+html.homolog-theme .button-outline::before { background: rgba(168, 85, 247, .18); }
+html.homolog-theme .product-card .button, html.homolog-theme .size-picker button { padding: 0 18px; letter-spacing: .18em; }
+
+/* ---------- Hero: texto à esquerda, foto em arco à direita ---------- */
+html.homolog-theme .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); align-items: center; gap: clamp(28px, 5vw, 80px); min-height: calc(100svh - 124px); padding: 32px var(--th-gutter) 72px; max-width: 1600px; margin: 0 auto; background: transparent; overflow: visible; }
+html.homolog-theme .hero::after { display: none; }
+html.homolog-theme .hero .hero-content { grid-column: 1; grid-row: 1; padding: 0; min-height: 0; max-width: none; }
+html.homolog-theme .hero .hero-image { position: relative; inset: auto; grid-column: 2; grid-row: 1; justify-self: end; width: 100%; max-width: 580px; height: auto; aspect-ratio: 3 / 4; border-radius: 9999px 9999px 0 0; background-size: cover; background-position: center 30%; }
+html.homolog-theme .hero h1 { margin: 28px 0 30px; font: 300 clamp(3.4rem, 8.6vw, 8.2rem)/.92 var(--font-display); letter-spacing: -.02em; text-transform: none; }
+html.homolog-theme .hero h1 span, html.homolog-theme .hero .hero-rotating-word { font-style: italic; font-weight: 300; padding-right: .08em; }
+html.homolog-theme .hero-content > p { max-width: 44ch; font-size: 17px; line-height: 1.6; margin-bottom: 40px; }
+html.homolog-theme .hero-actions { gap: 20px 28px; align-items: center; }
+
+/* ---------- Faixa de vantagens ---------- */
+html.homolog-theme .benefits strong { font: 500 11.5px var(--font-body); letter-spacing: .2em; }
+html.homolog-theme .benefits small { font-size: 13px; }
+
+/* ---------- Títulos de seção ---------- */
+html.homolog-theme .section-heading h2, html.homolog-theme .checkout-heading h2, html.homolog-theme .newsletter h2 { font: 300 clamp(2.6rem, 5.4vw, 5rem)/.95 var(--font-display); letter-spacing: -.02em; text-transform: none; }
+html.homolog-theme .manifesto-copy h2 { font: 300 clamp(2.4rem, 4.6vw, 4rem)/1 var(--font-display); letter-spacing: -.02em; text-transform: none; }
+html.homolog-theme :is(.section-heading, .manifesto-copy, .newsletter, .checkout-heading) h2 span { font-size: inherit; vertical-align: baseline; font-style: italic; }
+html.homolog-theme .section-heading > p { font-size: 15px; line-height: 1.7; }
+html.homolog-theme .section-wrap { padding-left: var(--th-gutter); padding-right: var(--th-gutter); }
+
+/* ---------- Cartões de produto ---------- */
+html.homolog-theme .product-card { border: 0; background: transparent; }
+html.homolog-theme .product-card:hover { border-color: transparent; transform: none; }
+html.homolog-theme .product-card .product-image { aspect-ratio: 3 / 4; overflow: hidden; }
+html.homolog-theme .product-card .product-image img, html.homolog-theme .product-card .product-image > div { transition: transform 1.6s var(--ease-luxe); }
+html.homolog-theme .product-card:hover .product-image img, html.homolog-theme .product-card:hover .product-image > div { transform: scale(1.045); }
+html.homolog-theme .product-card .product-image::after { content: "Ver peça"; position: absolute; left: 12px; right: 12px; bottom: 12px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: rgba(243, 240, 245, .94); color: #0b0a0e; font: 500 10.5px var(--font-body); letter-spacing: .24em; text-transform: uppercase; opacity: 0; transform: translateY(12px); transition: opacity .7s var(--ease-luxe), transform .7s var(--ease-luxe); pointer-events: none; }
+html.homolog-theme .product-card:hover .product-image::after { opacity: 1; transform: translateY(0); }
+html.homolog-theme .product-card.sold-out .product-image::after { display: none; }
+html.homolog-theme .product-card .product-info { padding: 16px 0 0; }
+html.homolog-theme .product-card .product-info h3 { margin: 6px 0 0; font: 500 clamp(22px, 2vw, 26px)/1.15 var(--font-display); letter-spacing: -.005em; }
+html.homolog-theme .product-card .product-info p { font-size: 14px; letter-spacing: 0; }
+html.homolog-theme .product-card .product-price { margin-top: 8px; font: 400 16px var(--font-body); letter-spacing: 0; }
+html.homolog-theme [class*="badge"], html.homolog-theme .product-flag, html.homolog-theme .product-tag { border-radius: 999px; font: 500 10px var(--font-body); letter-spacing: .2em; }
+
+/* ---------- Rodapé com a marca grande ---------- */
+html.homolog-theme .site-footer-expanded { padding: 96px var(--th-gutter) 28px; }
+html.homolog-theme .footer-main { gap: 56px; padding-bottom: 12px; }
+html.homolog-theme .footer-col > strong, html.homolog-theme .footer-col h3, html.homolog-theme .footer-col h4 { font: 500 11px var(--font-body); letter-spacing: .32em; text-transform: uppercase; }
+html.homolog-theme .footer-col a { font-size: 15px; }
+html.homolog-theme .footer-bottom { flex-wrap: wrap; }
+html.homolog-theme .footer-bottom::before { content: "KRYPTO"; flex: 0 0 100%; display: block; margin: 48px 0 36px; text-align: center; white-space: nowrap; font: 300 clamp(5rem, 19vw, 17rem)/.8 var(--font-display); letter-spacing: -.02em; color: transparent; background: linear-gradient(100deg, #7d2fd1 0%, #bd7cff 30%, #e5cbfd 46%, #a855f7 62%, #7d2fd1 100%); -webkit-background-clip: text; background-clip: text; opacity: .9; user-select: none; pointer-events: none; }
+
+/* ---------- Telas menores ---------- */
+@media (max-width: 960px) {
+  html.homolog-theme .store-header { height: 76px; gap: 12px; }
+  html.homolog-theme .store-header .brand { font-size: 26px; }
+  html.homolog-theme .store-header .main-nav, html.homolog-theme .header-search { display: none; }
+  html.homolog-theme .header-actions { margin-left: auto; }
+  html.homolog-theme .hero { grid-template-columns: 1fr; min-height: 0; padding-top: 20px; gap: 36px; }
+  html.homolog-theme .hero .hero-image { grid-column: 1; grid-row: 1; justify-self: center; max-width: min(88vw, 480px); }
+  html.homolog-theme .hero .hero-content { grid-column: 1; grid-row: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.homolog-theme *, html.homolog-theme *::before, html.homolog-theme *::after { transition-duration: .001ms !important; animation-duration: .001ms !important; }
+}
