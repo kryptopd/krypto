@@ -395,7 +395,7 @@ window.Krypto.loadShippingInfo().then((info) => {
   mark.addEventListener("click", () => {
     clicks += 1; clearTimeout(timer);
     timer = setTimeout(() => { clicks = 0; }, 3000);
-    if (clicks >= 5) location.assign("admin.html");
+    if (clicks >= 5) location.assign("/admin.html");
   });
 })();
 

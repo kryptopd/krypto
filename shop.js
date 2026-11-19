@@ -372,7 +372,7 @@
   function safeNext(value, fallback) {
     return /^[a-z0-9_-]+\.html$/i.test(String(value || "")) ? value : fallback;
   }
-  function goCheckout() { location.assign("checkout.html"); }
+  function goCheckout() { location.assign("/checkout.html"); }
 
   // ---------- Cabeçalho (contador da sacola e pedidos) ----------
   function refreshBadge() {
