@@ -135,6 +135,14 @@ $("#share-copy").addEventListener("click", async () => {
 
 async function refresh() {
   if (!id) throw new Error("Código do pedido ausente. Abra o link completo do seu pedido.");
+  // Pedido de teste (modo homologação): fica só neste navegador, o servidor não conhece.
+  if (/^HOM/i.test(id)) {
+    let order = null;
+    try { order = (JSON.parse(localStorage.getItem("krypto-homolog-orders-v1") || "{}"))[id.toUpperCase()] || null; } catch (_) {}
+    if (!order) throw new Error("Pedido de teste não encontrado neste navegador.");
+    render(order);
+    return;
+  }
   const response = await fetch(`/api/orders/${encodeURIComponent(id)}`, { cache: "no-store" });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || "Não foi possível consultar o pedido.");

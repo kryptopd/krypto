@@ -81,13 +81,7 @@ module.exports = async function handler(req, res) {
       if ((sched || []).some((p) => p.publish_at && new Date(p.publish_at) > new Date())) return res.status(409).json({ detail: "Uma das peças ainda não está disponível. Atualize a sacola." });
     } catch (_) { /* banco sem a coluna: segue */ }
     // Frete: "standard" (estado + peso) ou "km" (distância de carro, só nas cidades configuradas). Sempre recalculado aqui.
-    const chosen = String(body.shipping_option || "");
-    let quote;
-    if (chosen === "km") quote = await S.quoteKm(settings, customer, lines);
-    else if (chosen === "pickup") {
-      quote = S.pickupQuote(settings, lines);
-      if (!quote) return res.status(422).json({ detail: "A retirada na loja não está disponível no momento." });
-    } else quote = S.computeQuote(settings, uf, lines);
+    const quote = await S.resolveQuote(settings, String(body.shipping_option || ""), customer, uf, lines);
 
     const { error: expireError } = await supabase.rpc("expire_krypto_orders");
     if (expireError) throw expireError;

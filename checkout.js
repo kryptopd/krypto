@@ -352,6 +352,13 @@ form.addEventListener("submit", async (event) => {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.detail || "Não foi possível criar o pedido. Tente novamente.");
+    if (result.homologation) {   // modo homologação: pedido simulado, nada foi gravado na loja
+      K.Homolog.saveOrder(result.order);
+      Cart.clear();
+      clearMessage("Pedido de TESTE criado (homologação). Nada foi salvo na loja.");
+      location.assign(`pedido.html?order=${encodeURIComponent(result.id)}&new=1`);
+      return;
+    }
     Cart.clear();
     K.Orders.add(result.id);          // aparece em "Meus pedidos" neste aparelho
     K.Profile.write(confirmed);       // próxima compra já vem com os dados preenchidos

@@ -1,5 +1,6 @@
 const { getSupabase, sendError, requireMethod } = require('../_lib/supabase');
 const C = require('../_lib/customer');
+const Homolog = require('../_lib/homolog');
 const { publicOrder } = require('./orders/[id]');
 
 // Conta do cliente. Rotas (api/index.js): account/register | login | logout | me | orders | favorites | claim
@@ -13,7 +14,7 @@ const tooMany = (req, key, max = 10) => {
 };
 const fail = (status, detail) => Object.assign(new Error(detail), { statusCode: status });
 const validEmail = (v) => typeof v === "string" && v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-const publicCustomer = (c) => ({ id: c.id, email: c.email, name: c.name, phone: c.phone, address: c.address || {}, favorites: Array.isArray(c.favorites) ? c.favorites : [] });
+const publicCustomer = (c) => ({ id: c.id, email: c.email, name: c.name, phone: c.phone, address: c.address || {}, favorites: Array.isArray(c.favorites) ? c.favorites : [], developer: c.is_developer === true });
 
 function cleanAddress(a) {
   if (!a || typeof a !== "object") return {};
@@ -70,6 +71,7 @@ module.exports = async function handler(req, res) {
     if (action === "logout") {
       if (!requireMethod(req, res, ["POST"])) return;
       C.clearCookie(res, req);
+      Homolog.setCookie(res, req, false);
       return res.status(200).json({ ok: true });
     }
 
@@ -82,7 +84,7 @@ module.exports = async function handler(req, res) {
 
     if (action === "me") {
       if (!requireMethod(req, res, ["GET", "PUT"])) return;
-      if (req.method === "GET") return res.status(200).json(publicCustomer(me));
+      if (req.method === "GET") return res.status(200).json({ ...publicCustomer(me), homologation: me.is_developer === true && Homolog.cookieOn(req) });
       const patch = {};
       if (body.name !== undefined) patch.name = String(body.name || "").trim().slice(0, 160);
       if (body.phone !== undefined) patch.phone = String(body.phone || "").trim().slice(0, 40);
@@ -128,6 +130,17 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // Liga ou desliga o modo homologação (só contas de desenvolvedor).
+    if (action === "homolog") {
+      if (!requireMethod(req, res, ["POST"])) return;
+      if (me.is_developer !== true) throw fail(403, "Disponível só para contas de desenvolvedor.");
+      const on = body.on === true;
+      Homolog.setCookie(res, req, on);
+      return res.status(200).json({ homologation: on });
+    }
+
     throw fail(404, "Rota não encontrada.");
   } catch (error) { return sendError(res, error); }
 };
+module.exports.publicCustomer = publicCustomer;
+module.exports.cleanAddress = cleanAddress;

@@ -32,6 +32,8 @@ const handlers = {
   mercadoPagoWebhook: require("../server/_handlers/webhooks/mercadopago")
 };
 
+const Homolog = require("../server/_lib/homolog");
+
 function routePath(req) {
   // Vercel catch-all routes expose the matched segments as req.query.path.
   const fromQuery = req.query && req.query.path;
@@ -92,5 +94,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (!target) return res.status(404).json({ detail: "Rota não encontrada." });
+  // Modo homologação: com o modo ligado, nada que grava chega aos handlers de produção.
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && (await Homolog.guard(req, res, route))) return;
   return target(req, res);
 };

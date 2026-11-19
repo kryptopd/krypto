@@ -28,7 +28,9 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ temporary_password: temp });
     }
     const subs = await db.from("subscribers").select("id,email,source,created_at").order("created_at", { ascending: false }).limit(5000);
-    const custs = await db.from("customers").select("id,email,name,phone,created_at,last_login_at").order("created_at", { ascending: false }).limit(5000);
+    // Contas de desenvolvedor (modo homologação) nunca aparecem para o administrador.
+    let custs = await db.from("customers").select("id,email,name,phone,created_at,last_login_at").neq("is_developer", true).order("created_at", { ascending: false }).limit(5000);
+    if (custs.error && custs.error.code === "42703") custs = await db.from("customers").select("id,email,name,phone,created_at,last_login_at").order("created_at", { ascending: false }).limit(5000);
     const missing = [subs.error, custs.error].some((e) => e && e.code === "42P01");
     if (req.query.export === "csv") {
       const rows = [["Tipo", "E-mail", "Nome", "Telefone", "Cadastro"], ...(subs.data || []).map((s) => ["Interessado", s.email, "", "", s.created_at]), ...(custs.data || []).map((c) => ["Cliente", c.email, c.name, c.phone, c.created_at])];
