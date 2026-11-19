@@ -33,7 +33,19 @@ module.exports = async function handler(req, res) {
     const items = S.parseItemsParam(req.query.items);
     if (!items.length) return res.status(400).json({ detail: "Sua sacola está vazia." });
     const lines = await S.priceLines(supabase, items);
-    const stateQuote = S.computeQuote(settings, req.query.state, lines);
-    return res.status(200).json(stateQuote);
+    // Opção 1: frete padrão (estado + peso). Opção 2: valor por km, só nas cidades configuradas (ex.: Juiz de Fora).
+    const options = [];
+    let standardError = null, kmError = null;
+    try { options.push(S.computeQuote(settings, req.query.state, lines)); } catch (e) { standardError = e; }
+    if (req.query.city && S.findKmRule(settings, req.query.city, req.query.state)) {
+      try {
+        options.push(await S.quoteKm(settings, {
+          address: String(req.query.address || ""), address_number: String(req.query.number || ""),
+          city: String(req.query.city), state: req.query.state, postal_code: String(req.query.cep || "")
+        }, lines));
+      } catch (e) { kmError = e.message; }
+    }
+    if (!options.length) throw standardError;
+    return res.status(200).json({ ...options[0], options, km_error: kmError });
   } catch (error) { return sendError(res, error); }
 };

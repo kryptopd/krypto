@@ -19,6 +19,7 @@ let products = [], info = null;
 let savedAddress = null;      // dados da última compra, guardados só neste navegador
 let confirmed = null;         // endereço que será usado neste pedido
 let quote = null, quoteError = "", quoteSeq = 0, submitting = false;
+let quotes = [], kmError = "", shipOption = "standard";   // opções de frete (padrão e/ou por km)
 
 function showError(message) { feedback.textContent = message; feedback.dataset.error = "true"; }
 function clearMessage(message = "") { feedback.textContent = message; delete feedback.dataset.error; }
@@ -109,7 +110,7 @@ function renderTotals(subtotal) {
   if (quoteError) { shipEl.textContent = "Indisponível"; $("#summary-total").textContent = money(base); return; }
   if (!quote) { shipEl.textContent = "Calculando…"; $("#summary-total").textContent = money(base); return; }
   shipEl.textContent = quote.shipping_cents ? money(quote.shipping_cents) : "Grátis";
-  const parts = [`${confirmed.state}`];
+  const parts = [quote.option === "km" ? `${quote.city} · ${String(quote.distance_km).replace(".", ",")} km${quote.approximate ? " (estimado)" : ""}` : `${confirmed.state}`];
   if (quote.days) parts.push(`até ${quote.days} dias`);
   detail.textContent = `(${parts.join(" · ")})`;
   $("#summary-total").textContent = money(base + quote.shipping_cents);
@@ -145,23 +146,52 @@ couponForm.addEventListener("submit", async (event) => {
 // ---------- Frete (calculado no servidor) ----------
 async function refreshQuote() {
   const seq = ++quoteSeq;
-  quote = null; quoteError = "";
+  quote = null; quoteError = ""; quotes = []; kmError = "";
+  renderShipOptions();
   const states = lineState().filter((st) => !st.unavailable);
   if (!confirmed || !states.length) return renderTotals();
   renderTotals();
   const itemsParam = states.map((st) => `${st.line.product_id}:${st.qty}`).join(",");
   try {
-    const r = await fetch(`/api/shipping?state=${encodeURIComponent(confirmed.state)}&items=${encodeURIComponent(itemsParam)}`, { cache: "no-store" });
+    const where = `&city=${encodeURIComponent(confirmed.city)}&cep=${encodeURIComponent(confirmed.postal_code)}&address=${encodeURIComponent(confirmed.address)}&number=${encodeURIComponent(confirmed.address_number)}`;
+    const r = await fetch(`/api/shipping?state=${encodeURIComponent(confirmed.state)}&items=${encodeURIComponent(itemsParam)}${where}`, { cache: "no-store" });
     const data = await r.json().catch(() => ({}));
     if (seq !== quoteSeq) return;
     if (!r.ok) throw new Error(data.detail || "Não foi possível calcular o frete.");
-    quote = data;
+    quotes = Array.isArray(data.options) && data.options.length ? data.options : [data];
+    kmError = data.km_error || "";
+    quote = quotes.find((q) => q.option === shipOption) || quotes[0];
+    shipOption = quote.option;
   } catch (e) {
     if (seq !== quoteSeq) return;
     quoteError = e.message;
     showError(e.message);
   }
+  renderShipOptions();
   renderTotals();
+}
+
+// Escolha da forma de entrega (aparece quando há mais de uma, por exemplo "valor por km" em Juiz de Fora).
+function renderShipOptions() {
+  const box = $("#ship-options"), list = $("#ship-options-list"), note = $("#ship-options-note");
+  list.replaceChildren();
+  note.textContent = kmError && quotes.length ? `Entrega por km indisponível agora: ${kmError}` : "";
+  box.hidden = !(quotes.length > 1 || (kmError && quotes.length));
+  if (box.hidden || quotes.length < 2) return;
+  quotes.forEach((q) => {
+    const label = el("label", undefined, "pay-option");
+    const input = document.createElement("input");
+    input.type = "radio"; input.name = "shipping_option"; input.value = q.option; input.checked = q.option === shipOption;
+    input.addEventListener("change", () => { shipOption = q.option; quote = q; renderTotals(); });
+    const card = el("span", undefined, "pay-card");
+    const price = q.shipping_cents ? money(q.shipping_cents) : "Grátis";
+    const detail = q.option === "km"
+      ? `${String(q.distance_km).replace(".", ",")} km de distância × ${money(q.per_km_cents)} por km${q.approximate ? " (distância estimada)" : ""}`
+      : `Por estado e peso${q.days ? ` · até ${q.days} dias` : ""}`;
+    card.append(el("strong", `${q.name} · ${price}`), el("small", detail));
+    label.append(input, card);
+    list.append(label);
+  });
 }
 
 // ---------- Endereço ----------
@@ -190,7 +220,7 @@ function showEditor(banner, canCancel) {
   (fields.nome.value ? fields.cep : fields.nome).focus();
 }
 function setConfirmed(address) {
-  confirmed = address; quote = null; quoteError = "";
+  confirmed = address; quote = null; quoteError = ""; quotes = []; kmError = "";
   clearMessage();
   showSaved(address, true);
   refreshQuote();
@@ -222,7 +252,7 @@ function addressProblem(a) {
 $("#address-keep").addEventListener("click", () => setConfirmed(savedAddress));
 $("#address-change").addEventListener("click", () => {
   const previous = confirmed || savedAddress || {};
-  confirmed = null; quote = null; quoteError = ""; quoteSeq++; clearMessage(); renderTotals();
+  confirmed = null; quote = null; quoteError = ""; quotes = []; kmError = ""; quoteSeq++; clearMessage(); renderShipOptions(); renderTotals();
   fields.nome.value = previous.name || fields.nome.value;
   fields.email.value = previous.email || fields.email.value;
   fields.telefone.value = previous.phone || fields.telefone.value;
@@ -308,7 +338,7 @@ form.addEventListener("submit", async (event) => {
   clearMessage();
   try {
     const payload = {
-      privacy_consent: true, payment_method: method, website: form.elements.website.value, coupon: couponCode,
+      privacy_consent: true, payment_method: method, shipping_option: quote.option, website: form.elements.website.value, coupon: couponCode,
       customer: {
         name: confirmed.name, email: confirmed.email, phone: confirmed.phone, address: confirmed.address, address_number: confirmed.address_number,
         complement: confirmed.complement || "", city: confirmed.city, state: confirmed.state, postal_code: confirmed.postal_code

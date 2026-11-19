@@ -194,6 +194,27 @@
           </div>
         </details>
 
+        <div class="shipping-km" id="shipping-km">
+          <strong>Entrega por valor por km</strong>
+          <p class="field-help">Segunda opção de frete: cobra a distância de carro entre o endereço de saída da loja e o cliente, só nas cidades da lista. O cliente escolhe entre ela e o frete padrão.</p>
+          <label class="check-card"><input type="checkbox" name="km_enabled"> <span><strong>Oferecer entrega por km</strong><small>Desligue para mostrar só o frete padrão.</small></span></label>
+          <div class="shipping-general">
+            <label class="field">Nome da opção<input type="text" name="km_name" maxlength="60" placeholder="Entrega por km"></label>
+            <label class="field">Rua de saída<input type="text" name="km_street" maxlength="120" placeholder="Rua José dos Anjos"></label>
+            <label class="field">Número<input type="text" name="km_number" maxlength="20" placeholder="115"></label>
+            <label class="field">CEP<input type="text" name="km_cep" inputmode="numeric" maxlength="9" placeholder="36091-205"></label>
+            <label class="field">Cidade<input type="text" name="km_city" maxlength="80" placeholder="Juiz de Fora"></label>
+            <label class="field">UF<input type="text" name="km_uf" maxlength="2" placeholder="MG"></label>
+          </div>
+          <div class="table-wrap">
+            <table class="shipping-table">
+              <thead><tr><th>CIDADE ATENDIDA</th><th>UF</th><th>R$ POR KM</th><th>MÍNIMO (R$)</th><th>PRAZO (DIAS)</th><th></th></tr></thead>
+              <tbody id="km-rows"></tbody>
+            </table>
+          </div>
+          <button class="button button-outline" type="button" id="km-add">Adicionar cidade</button>
+        </div>
+
         <div class="shipping-sim">
           <strong>Simulador</strong>
           <label class="field">Estado<select id="sim-state"></select></label>

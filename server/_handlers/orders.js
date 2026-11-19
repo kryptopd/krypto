@@ -80,7 +80,10 @@ module.exports = async function handler(req, res) {
       const { data: sched } = await supabase.from("products").select("id,publish_at").in("id", [...new Set(items.map((i) => i.product_id))]);
       if ((sched || []).some((p) => p.publish_at && new Date(p.publish_at) > new Date())) return res.status(409).json({ detail: "Uma das peças ainda não está disponível. Atualize a sacola." });
     } catch (_) { /* banco sem a coluna: segue */ }
-    const quote = S.computeQuote(settings, uf, lines);
+    // Frete: "standard" (estado + peso) ou "km" (distância de carro, só nas cidades configuradas). Sempre recalculado aqui.
+    const quote = String(body.shipping_option || "") === "km"
+      ? await S.quoteKm(settings, customer, lines)
+      : S.computeQuote(settings, uf, lines);
 
     const { error: expireError } = await supabase.rpc("expire_krypto_orders");
     if (expireError) throw expireError;
