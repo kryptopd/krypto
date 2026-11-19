@@ -3,13 +3,13 @@
 html.homolog-fx { --fx-ease: cubic-bezier(.22, 1, .36, 1); --fx-purple: #a855f7; }
 
 /* ---------- Abertura cinematográfica (1x por sessão) ---------- */
-.fx-intro { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #0b0a0e; transition: transform 1s var(--fx-ease) .15s; will-change: transform; }
+.fx-intro { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #0b0a0e; transition: transform 1.3s var(--fx-ease) .15s; will-change: transform; }
 .fx-intro.is-out { transform: translateY(-101%); }
 .fx-intro-mark { display: flex; align-items: center; gap: 14px; color: #fff; font: 700 clamp(26px, 4vw, 44px) var(--font-display, inherit); letter-spacing: .32em; overflow: hidden; }
-.fx-intro-mark svg { width: 38px; height: 32px; stroke: var(--fx-purple); fill: none; stroke-width: 1.6; stroke-dasharray: 120; stroke-dashoffset: 120; animation: fx-draw 1s var(--fx-ease) .1s forwards; }
-.fx-intro-mark span { display: inline-block; transform: translateY(110%); animation: fx-rise .9s var(--fx-ease) forwards; animation-delay: calc(.15s + var(--i) * .05s); }
+.fx-intro-mark svg { width: 38px; height: 32px; stroke: var(--fx-purple); fill: none; stroke-width: 1.6; stroke-dasharray: 120; stroke-dashoffset: 120; animation: fx-draw 1.5s var(--fx-ease) .15s forwards; }
+.fx-intro-mark span { display: inline-block; transform: translateY(110%); animation: fx-rise 1.2s var(--fx-ease) forwards; animation-delay: calc(.3s + var(--i) * .11s); }
 .fx-intro-bar { position: absolute; left: 50%; bottom: 18vh; width: min(220px, 40vw); height: 1px; background: #26222d; transform: translateX(-50%); overflow: hidden; }
-.fx-intro-bar::after { content: ""; position: absolute; inset: 0; background: var(--fx-purple); transform: scaleX(0); transform-origin: left; animation: fx-fill .9s var(--fx-ease) .1s forwards; }
+.fx-intro-bar::after { content: ""; position: absolute; inset: 0; background: var(--fx-purple); transform: scaleX(0); transform-origin: left; animation: fx-fill 1.9s cubic-bezier(.45, 0, .2, 1) .15s forwards; }
 @keyframes fx-draw { to { stroke-dashoffset: 0; } }
 @keyframes fx-rise { to { transform: translateY(0); } }
 @keyframes fx-fill { to { transform: scaleX(1); } }
@@ -41,12 +41,12 @@ html.homolog-fx .hero:hover .hero-glow { opacity: 1; }
 html.homolog-fx .hero .eyebrow, html.homolog-fx .hero-content > p, html.homolog-fx .hero-actions { opacity: 0; transform: translateY(22px); }
 html.homolog-fx .hero .fx-mask { display: block; overflow: hidden; padding-bottom: .08em; margin-bottom: -.08em; }
 html.homolog-fx .hero .fx-mask > * { display: inline-block; transform: translateY(105%); }
-html.homolog-fx.fx-go .hero .eyebrow { animation: fx-up .9s var(--fx-ease) .05s forwards; }
-html.homolog-fx.fx-go .hero .fx-mask > * { animation: fx-rise 1.1s var(--fx-ease) forwards; }
-html.homolog-fx.fx-go .hero .fx-mask:nth-of-type(1) > * { animation-delay: .15s; }
-html.homolog-fx.fx-go .hero .fx-mask:nth-of-type(2) > * { animation-delay: .3s; }
-html.homolog-fx.fx-go .hero-content > p { animation: fx-up .9s var(--fx-ease) .55s forwards; }
-html.homolog-fx.fx-go .hero-actions { animation: fx-up .9s var(--fx-ease) .72s forwards; }
+html.homolog-fx.fx-go .hero .eyebrow { animation: fx-up 1.2s var(--fx-ease) .1s forwards; }
+html.homolog-fx.fx-go .hero .fx-mask > * { animation: fx-rise 1.5s var(--fx-ease) forwards; }
+html.homolog-fx.fx-go .hero .fx-mask:nth-of-type(1) > * { animation-delay: .25s; }
+html.homolog-fx.fx-go .hero .fx-mask:nth-of-type(2) > * { animation-delay: .5s; }
+html.homolog-fx.fx-go .hero-content > p { animation: fx-up 1.2s var(--fx-ease) .9s forwards; }
+html.homolog-fx.fx-go .hero-actions { animation: fx-up 1.2s var(--fx-ease) 1.15s forwards; }
 @keyframes fx-up { to { opacity: 1; transform: none; } }
 
 /* botões do hero */
