@@ -1612,3 +1612,11 @@ main:focus { outline: none; }
 .dev-bar.is-on button { border-color: #1a1100; color: #1a1100; }
 .dev-bar.is-on button:hover { background: rgba(26,17,0,.12); }
 .dev-pill { position: fixed; z-index: 90; left: 12px; bottom: 12px; padding: 6px 12px; background: #f5a524; color: #1a1100; font: 800 11px var(--font-body); letter-spacing: .12em; border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.4); pointer-events: none; }
+
+/* Comprar agora + Adicionar à sacola: botões grandes e fáceis de tocar */
+.buy-actions { display: grid; gap: 12px; margin-top: 8px; }
+.buy-actions .button { width: 100%; min-height: 58px; font-size: 14px; letter-spacing: .12em; justify-content: center; }
+.buy-actions .buy-now { box-shadow: 0 10px 30px -10px rgba(168, 85, 247, .55); }
+.pdp-sticky .sticky-actions { display: flex; gap: 8px; flex: 1 1 auto; justify-content: flex-end; }
+.pdp-sticky .sticky-actions .button { min-height: 50px; padding: 0 16px; font-size: 12.5px; flex: 1 1 0; max-width: 220px; justify-content: center; }
+@media (max-width: 640px) { .pdp-sticky > div:first-child { display: none; } .pdp-sticky .sticky-actions .button { max-width: none; } }

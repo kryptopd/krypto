@@ -83,16 +83,24 @@
   if (mainButton && "IntersectionObserver" in window) {
     const bar = el("div", undefined, "pdp-sticky"); bar.hidden = true;
     const info = el("div"); info.append(el("strong", product.name), el("span", K.money(product.price_cents)));
-    const btn = el("button", "Adicionar à sacola", "button button-light"); btn.type = "button";
+    const btn = el("button", "Adicionar à sacola", "button button-ghost"); btn.type = "button";
+    const buyBtn = el("button", "Comprar agora", "button button-primary"); buyBtn.type = "button";
+    const sticky = el("div", undefined, "sticky-actions");
     btn.addEventListener("click", () => {
       mainButton.click();
       const err = panel.root.querySelector(".product-msg[data-error]");
       const form = panel.root.querySelector(".stock-alert:not([hidden])");
       if (err || form) panel.root.scrollIntoView({ behavior: "smooth", block: "center" });
     });
-    bar.append(info, btn); document.body.append(bar);
-    const sync = () => { btn.textContent = mainButton.textContent; };
-    new MutationObserver(sync).observe(mainButton, { childList: true, characterData: true, subtree: true }); sync();
+    const buyMain = panel.root.querySelector(".buy-now");
+    buyBtn.addEventListener("click", () => {
+      if (buyMain && !buyMain.hidden) buyMain.click(); else mainButton.click();
+      const err = panel.root.querySelector(".product-msg[data-error]");
+      if (err) panel.root.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    sticky.append(buyBtn, btn); bar.append(info, sticky); document.body.append(bar);
+    const sync = () => { btn.textContent = mainButton.textContent; buyBtn.hidden = !!(buyMain && buyMain.hidden); btn.classList.toggle("button-primary", buyBtn.hidden); btn.classList.toggle("button-ghost", !buyBtn.hidden); };
+    new MutationObserver(sync).observe(mainButton, { childList: true, characterData: true, subtree: true }); if (buyMain) new MutationObserver(sync).observe(buyMain, { attributes: true, attributeFilter: ["hidden"] }); sync();
     new IntersectionObserver(([entry]) => { const show = !entry.isIntersecting && entry.boundingClientRect.top < 0; bar.hidden = !show; document.body.classList.toggle("has-sticky", show); }, { threshold: 0 }).observe(mainButton);
   }
 
