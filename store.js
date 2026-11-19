@@ -78,6 +78,7 @@ function visibleProducts() {
 }
 
 // Galeria da peça: rolagem lateral com encaixe (arrastar no celular), setas e bolinhas. Até 4 fotos.
+let eagerLeft = 4;   // só as 4 primeiras fotos da página carregam de imediato
 function gallery(product, urls, href) {
   const box = el("div", undefined, "product-image product-gallery");
   box.setAttribute("role", "group");
@@ -87,7 +88,7 @@ function gallery(product, urls, href) {
     const img = document.createElement("img");
     img.src = thumbOf(url); img.onerror = () => { img.onerror = null; img.src = url; };
     img.alt = urls.length > 1 ? `${product.name}, foto ${i + 1} de ${urls.length}` : product.name;
-    img.loading = i === 0 ? "eager" : "lazy"; img.decoding = "async"; img.draggable = false;
+    img.loading = i === 0 && eagerLeft-- > 0 ? "eager" : "lazy"; img.decoding = "async"; img.draggable = false;
     track.append(img);
   });
   if (urls.length > 1) { track.tabIndex = 0; track.setAttribute("role", "group"); track.setAttribute("aria-label", `Fotos de ${product.name}. Use as setas do teclado para ver mais.`); }

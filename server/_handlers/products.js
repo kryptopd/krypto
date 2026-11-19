@@ -6,7 +6,7 @@ module.exports = async function handler(req, res) {
   if (!requireMethod(req, res, ["GET"])) return;
   try {
     const supabase = getSupabase();
-    res.setHeader("Cache-Control", "s-maxage=30, stale-while-revalidate=60");
+    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=600");
     if (req.query.categories) {
       const { data, error } = await supabase.from("categories").select("id,name").order("name", { ascending: true });
       if (error) throw error;
