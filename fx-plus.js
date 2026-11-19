@@ -95,6 +95,16 @@
     });
     return s;
   }
+  // Só mostra peças que ainda estão à venda (e apaga do navegador as que saíram da loja)
+  function liveRecent(extraHref) {
+    return products().then(function (list) {
+      var k = K(); if (!list.length || !k.productPath) return readRV();
+      var alive = {}; list.forEach(function (x) { alive[k.productPath(x)] = 1; });
+      var kept = readRV().filter(function (x) { return alive[x.href]; });
+      try { localStorage.setItem(RV, JSON.stringify(kept)); } catch (_) {}
+      return kept;
+    });
+  }
   function initRecent() {
     var node = $("#product-data");
     if (node) { // página da peça: guarda e mostra as outras vistas
@@ -102,12 +112,16 @@
         var p = JSON.parse(node.textContent), k = K(); if (!k.productPath) return;
         var href = k.productPath(p), me = { href: href, name: p.name, img: (k.coverFor ? k.coverFor(p, "") : p.image_url) || p.image_url, price: p.price_cents };
         saveRV(me);
-        var others = readRV().filter(function (x) { return x.href !== href; }).slice(0, 4);
-        var main = $("main"); if (others.length && main) main.appendChild(rvSection(others, "Vistos recentemente"));
+        liveRecent().then(function (all) {
+          var others = all.filter(function (x) { return x.href !== href; }).slice(0, 4), main = $("main");
+          if (others.length && main) main.appendChild(rvSection(others, "Vistos recentemente"));
+        });
       } catch (_) {}
     } else if ($(".hero")) { // home
-      var items = readRV().slice(0, 6), anchor = $("#sobre") || $(".manifesto");
-      if (items.length && anchor) anchor.parentNode.insertBefore(rvSection(items, "Vistos recentemente"), anchor);
+      liveRecent().then(function (all) {
+        var items = all.slice(0, 6), anchor = $("#sobre") || $(".manifesto");
+        if (items.length && anchor) anchor.parentNode.insertBefore(rvSection(items, "Vistos recentemente"), anchor);
+      });
     }
   }
 
