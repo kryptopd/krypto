@@ -226,6 +226,17 @@ async function quoteKm(settings, customer, lines) {
   return computeKmQuote(settings, rule, lines, km, approximate);
 }
 
+// Escolhe a cotação pela opção do cliente: "km", "pickup" ou (padrão) estado + peso.
+async function resolveQuote(settings, option, customer, uf, lines) {
+  if (option === "km") return quoteKm(settings, customer, lines);
+  if (option === "pickup") {
+    const q = pickupQuote(settings, lines);
+    if (!q) throw Object.assign(new Error("A retirada na loja não está disponível no momento."), { statusCode: 422 });
+    return q;
+  }
+  return computeQuote(settings, uf, lines);
+}
+
 // "12:2,15:1" -> [{ product_id: 12, quantity: 2 }, ...]
 function parseItemsParam(raw) {
   const out = [];
@@ -252,5 +263,5 @@ async function priceLines(supabase, items) {
 
 module.exports = {
   UF_NAMES, UFS, REGION_OF, defaultSettings, sanitizeSettings, normalizeSettings, readSettings, saveSettings,
-  normalizeUf, computeQuote, parseItemsParam, priceLines, defaultKm, sanitizeKm, findKmRule, computeKmQuote, quoteKm, defaultPickup, sanitizePickup, pickupQuote
+  normalizeUf, computeQuote, parseItemsParam, priceLines, defaultKm, sanitizeKm, findKmRule, computeKmQuote, quoteKm, defaultPickup, sanitizePickup, pickupQuote, resolveQuote
 };

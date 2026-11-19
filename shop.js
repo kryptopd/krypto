@@ -133,6 +133,7 @@
   }
   // Evento de loja: só dispara se a pessoa aceitou os cookies de análise e o painel tem os códigos configurados.
   function track(name, data) {
+    if (homologOn()) return;   // modo homologação: nada vai para as métricas da loja
     if (readConsent() !== "granted") return;
     if (!trackersOn) { pendingEvents.push([name, data || {}]); return; }
     send(name, data || {});
@@ -157,6 +158,16 @@
     });
   }
 
+  // ---------- Modo homologação (só contas de desenvolvedor) ----------
+  // O servidor é quem bloqueia as gravações; este aviso local (só visual) mantém o botão e as métricas em sincronia.
+  const HOMOLOG_FLAG = "krypto-homolog-ui", HOMOLOG_ORDERS = "krypto-homolog-orders-v1";
+  function homologOn() { try { return localStorage.getItem(HOMOLOG_FLAG) === "1"; } catch (_) { return false; } }
+  const Homolog = {
+    on: homologOn,
+    // Pedidos de teste ficam só neste navegador (nunca no banco).
+    saveOrder(order) { try { const all = JSON.parse(localStorage.getItem(HOMOLOG_ORDERS) || "{}"); all[order.public_id] = order; localStorage.setItem(HOMOLOG_ORDERS, JSON.stringify(all)); } catch (_) {} }
+  };
+
   // ---------- Conta do cliente (login próprio, salvo no banco) ----------
   let mePromise = null;
   const Account = {
@@ -175,6 +186,26 @@
   function refreshAccountLabel() {
     Account.me().then((me) => {
       document.querySelectorAll("[data-account-label]").forEach((el) => { el.textContent = me ? (me.name ? `Olá, ${me.name.split(" ")[0]}` : "Minha conta") : (Orders.count() ? `Meus pedidos (${Orders.count()})` : "Entrar"); });
+    });
+  }
+
+  // Faixa no topo da página, só para o desenvolvedor: botão para ligar/desligar o modo homologação.
+  function initDevBar() {
+    Account.me().then((me) => {
+      const on = Boolean(me && me.developer && me.homologation);
+      try { if (on) localStorage.setItem(HOMOLOG_FLAG, "1"); else localStorage.removeItem(HOMOLOG_FLAG); } catch (_) {}
+      if (!me || !me.developer) return;
+      const bar = mk("div", undefined, on ? "dev-bar is-on" : "dev-bar"); bar.setAttribute("role", "region"); bar.setAttribute("aria-label", "Opções de desenvolvedor");
+      const text = mk("span", on ? "MODO HOMOLOGAÇÃO ATIVO · nada do que você fizer é salvo na loja nem aparece para o admin" : "Opções de desenvolvedor");
+      const button = mk("button", on ? "Desativar modo homologação" : "Ativar modo homologação"); button.type = "button";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await Account.call("homolog", "POST", { on: !on }); try { if (!on) localStorage.setItem(HOMOLOG_FLAG, "1"); else localStorage.removeItem(HOMOLOG_FLAG); } catch (_) {} location.reload(); }
+        catch (error) { button.disabled = false; text.textContent = error.message; }
+      });
+      bar.append(text, button);
+      document.body.prepend(bar);
+      if (on) { const pill = mk("div", "HOMOLOGAÇÃO", "dev-pill"); document.body.append(pill); }
     });
   }
 
@@ -356,7 +387,7 @@
   window.addEventListener("krypto:cart", refreshBadge);
   window.addEventListener("storage", (e) => { if (e.key === CART_KEY) refreshBadge(); });
   window.addEventListener("krypto:orders", refreshAccount);
-document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); initConsent(); initMenu(); initContact(); });
+document.addEventListener("DOMContentLoaded", () => { refreshBadge(); refreshAccount(); initConsent(); initMenu(); initContact(); initDevBar(); });
 
-  window.Krypto = { Account, thumbOf, saleOf, priceBlock, loadShippingInfo, variantsOf, stockFor, colorStock, maxQty, productPath, loadConfig, track, colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
+  window.Krypto = { Homolog, Account, thumbOf, saleOf, priceBlock, loadShippingInfo, variantsOf, stockFor, colorStock, maxQty, productPath, loadConfig, track, colorsOf, imagesFor, coverFor, lineColorOk, money, Cart, Orders, Profile, loadProducts, safeNext, goCheckout, refreshAccount };
 })();
