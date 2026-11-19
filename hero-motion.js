@@ -1,7 +1,7 @@
 (() => {
  const word=document.querySelector("#hero-rotating-word"), image=document.querySelector("#hero-image");
  if(!word||!image)return;
- const words=["atitude.","identidade.","liberdade.","presença.","seu estilo.","seu caminho."];
+ const words=["atitude.","identidade.","liberdade.","presença.","essência.","coragem."];
  let wi=0,ii=0,photos=[];
  const swap=()=>{word.classList.remove("glitch-in");word.classList.add("glitch-out");setTimeout(()=>{wi=(wi+1)%words.length;word.textContent=words[wi];word.classList.remove("glitch-out");word.classList.add("glitch-in");},260);};
  setInterval(swap,2800);
