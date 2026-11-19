@@ -116,7 +116,9 @@
 
     const hint = el("p", "", "stock-hint");
     const message = el("p", "", "product-msg"); message.setAttribute("role", "status");
-    const action = el("button", "Adicionar à sacola", "button button-primary add-to-cart"); action.type = "button";
+    const action = el("button", "Adicionar à sacola", "button button-ghost add-to-cart"); action.type = "button";
+    const buyNow = el("button", "Comprar agora", "button button-primary buy-now"); buyNow.type = "button";
+    const actions = el("div", undefined, "buy-actions"); actions.append(buyNow, action);
 
     // ----- Avise-me
     const alertForm = el("form", undefined, "stock-alert"); alertForm.hidden = true; alertForm.noValidate = true;
@@ -164,6 +166,8 @@
       hint.textContent = !out && units > 0 && units <= 3 ? `Restam só ${units} ${units === 1 ? "unidade" : "unidades"}` : "";
       action.textContent = out ? "Avise-me quando chegar" : "Adicionar à sacola";
       action.classList.toggle("is-alert", out);
+      action.classList.toggle("button-primary", out); action.classList.toggle("button-ghost", !out);
+      buyNow.hidden = out;
       if (!out) alertForm.hidden = true;
     }
 
@@ -174,7 +178,16 @@
       if (addToBag(product, color, size) && opts.onAdded) opts.onAdded();
     });
 
-    if (!opts.compact) root.append(hint, message, action, alertForm);
+    // "Comprar agora": coloca na sacola e vai direto para o pagamento.
+    buyNow.addEventListener("click", () => {
+      if (isOut()) return;
+      if (product.sizes.length && !size) { message.textContent = "Escolha um tamanho."; message.dataset.error = "true"; return; }
+      message.textContent = ""; delete message.dataset.error;
+      const inBag = K.Cart.lines().some((l) => l.product_id === product.id && l.size === size && (l.color || "") === color);
+      if (inBag || addToBag(product, color, size)) K.goCheckout();
+    });
+
+    if (!opts.compact) root.append(hint, message, actions, alertForm);
     refresh();
     return { root, color: () => color, size: () => size };
   }
